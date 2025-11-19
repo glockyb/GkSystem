@@ -1,0 +1,28 @@
+#!/bin/bash
+# Docker Desktop 安装脚本
+
+echo "=========================================="
+echo "Docker Desktop 安装指南"
+echo "=========================================="
+echo ""
+echo "由于系统限制，请手动安装 Docker Desktop："
+echo ""
+echo "方法1：下载安装（推荐）"
+echo "1. 访问: https://www.docker.com/products/docker-desktop"
+echo "2. 下载 Docker Desktop for Mac (Intel芯片或Apple芯片)"
+echo "3. 打开下载的 .dmg 文件"
+echo "4. 将 Docker 拖拽到 Applications 文件夹"
+echo "5. 打开 Applications 文件夹，双击 Docker 启动"
+echo "6. 等待 Docker 启动完成（菜单栏会显示 Docker 图标）"
+echo ""
+echo "方法2：使用 Homebrew（如果支持）"
+echo "brew install --cask docker"
+echo ""
+echo "安装完成后，运行以下命令验证："
+echo "docker --version"
+echo "docker-compose --version"
+echo ""
+echo "然后运行启动脚本："
+echo "bash start-docker.sh"
+echo "=========================================="
+
