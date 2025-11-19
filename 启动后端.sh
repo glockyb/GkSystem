@@ -1,115 +1,248 @@
 #!/bin/bash
-# 启动后端服务的完整脚本
+# 启动后端服务的完整脚本 (Ubuntu 版本)
 
 set -e
 
 echo "=========================================="
-echo "启动后端服务"
+echo "启动后端服务 (Ubuntu 版本)"
 echo "=========================================="
 echo ""
 
-cd "$(dirname "$0")"
+# 获取脚本目录
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
+
+# 颜色定义
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+log_info() { echo -e "${BLUE}INFO: $1${NC}"; }
+log_success() { echo -e "${GREEN}SUCCESS: $1${NC}"; }
+log_warning() { echo -e "${YELLOW}WARNING: $1${NC}"; }
+log_error() { echo -e "${RED}ERROR: $1${NC}"; }
 
 # 检查 MySQL
-echo "🔍 检查 MySQL..."
-if ! command -v mysql &> /dev/null; then
-    echo "❌ MySQL 未安装"
-    echo "请先安装 MySQL: brew install mysql"
-    echo "然后运行: brew services start mysql"
-    exit 1
-fi
-
-# 检查 MySQL 服务
-if ! brew services list 2>/dev/null | grep -q "mysql.*started"; then
-    echo "⚠️  MySQL 服务未启动，正在启动..."
-    brew services start mysql || {
-        echo "❌ 无法启动 MySQL 服务"
-        echo "请手动启动: brew services start mysql"
-        exit 1
-    }
-    echo "⏳ 等待 MySQL 启动（5秒）..."
-    sleep 5
-else
-    echo "✅ MySQL 服务运行中"
-fi
-
-# 检查 Redis（可选）
-echo "🔍 检查 Redis..."
-if command -v redis-cli &> /dev/null; then
-    if ! brew services list 2>/dev/null | grep -q "redis.*started"; then
-        echo "⚠️  Redis 服务未启动，正在启动..."
-        brew services start redis || echo "⚠️  Redis 启动失败，继续..."
-        sleep 2
-    else
-        echo "✅ Redis 服务运行中"
-    fi
-else
-    echo "⚠️  Redis 未安装（可选，推荐功能需要）"
-fi
-
-# 检查数据库
-echo "🔍 检查数据库..."
-mysql -u root -e "USE canteen_recommendation;" 2>/dev/null || {
-    echo "⚠️  数据库不存在，正在创建..."
-    mysql -u root << EOF
-CREATE DATABASE IF NOT EXISTS canteen_recommendation CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-EOF
+check_mysql() {
+    log_info "检查 MySQL..."
     
-    echo "📥 导入数据库初始化脚本..."
-    if [ -f "backend/database/init.sql" ]; then
-        mysql -u root canteen_recommendation < backend/database/init.sql || {
-            echo "⚠️  数据库初始化失败，请手动导入"
-        }
+    if ! command -v mysql >/dev/null 2>&1; then
+        log_error "MySQL 未安装"
+        echo "请先安装 MySQL: sudo apt install mysql-server"
+        exit 1
+    fi
+
+    # 检查 MySQL 服务状态
+    if ! sudo systemctl is-active mysql >/dev/null 2>&1; then
+        log_warning "MySQL 服务未启动，正在启动..."
+        sudo systemctl start mysql
+        if ! sudo systemctl is-active mysql >/dev/null 2>&1; then
+            log_error "无法启动 MySQL 服务"
+            echo "请手动启动: sudo systemctl start mysql"
+            exit 1
+        fi
+        log_info "等待 MySQL 启动（5秒）..."
+        sleep 5
+    else
+        log_success "MySQL 服务运行中"
+    fi
+
+    # 测试 MySQL 连接
+    if ! mysql -u root -e "SELECT 1;" >/dev/null 2>&1; then
+        log_warning "MySQL 连接测试失败，尝试使用 sudo..."
+        if ! sudo mysql -u root -e "SELECT 1;" >/dev/null 2>&1; then
+            log_error "无法连接到 MySQL"
+            echo "请检查 MySQL 配置和权限"
+            exit 1
+        fi
+        MYSQL_PREFIX="sudo "
+    else
+        MYSQL_PREFIX=""
     fi
 }
 
-echo "✅ 数据库检查完成"
+# 检查 Redis
+check_redis() {
+    log_info "检查 Redis..."
+    
+    if command -v redis-cli >/dev/null 2>&1; then
+        if ! sudo systemctl is-active redis-server >/dev/null 2>&1; then
+            log_warning "Redis 服务未启动，正在启动..."
+            sudo systemctl start redis-server || log_warning "Redis 启动失败，继续..."
+            sleep 2
+        else
+            log_success "Redis 服务运行中"
+        fi
+        
+        # 测试 Redis 连接
+        if redis-cli ping >/dev/null 2>&1; then
+            log_success "Redis 连接正常"
+        else
+            log_warning "Redis 连接失败，但继续启动"
+        fi
+    else
+        log_warning "Redis 未安装（可选，推荐功能需要）"
+    fi
+}
 
-# 检查 Python 虚拟环境
-echo "🔍 检查 Python 环境..."
-cd backend
+# 检查并初始化数据库
+setup_database() {
+    log_info "检查数据库..."
+    
+    # 检查数据库是否存在
+    if ${MYSQL_PREFIX}mysql -u root -e "USE canteen_recommendation;" >/dev/null 2>&1; then
+        log_success "数据库存在"
+    else
+        log_warning "数据库不存在，正在创建..."
+        ${MYSQL_PREFIX}mysql -u root << 'EOF'
+CREATE DATABASE IF NOT EXISTS canteen_recommendation CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+EOF
+        if [ $? -eq 0 ]; then
+            log_success "数据库创建成功"
+        else
+            log_error "数据库创建失败"
+            exit 1
+        fi
+    fi
 
-if [ ! -d "venv" ]; then
-    echo "📦 创建 Python 虚拟环境..."
-    python3 -m venv venv || {
-        echo "❌ 无法创建虚拟环境"
-        echo "请检查 Python 3 是否安装: python3 --version"
+    # 导入初始化脚本
+    if [ -f "backend/database/init.sql" ]; then
+        log_info "导入数据库初始化脚本..."
+        if ${MYSQL_PREFIX}mysql -u root canteen_recommendation < backend/database/init.sql; then
+            log_success "数据库初始化完成"
+        else
+            log_warning "数据库初始化失败，但继续启动"
+        fi
+    else
+        log_warning "未找到数据库初始化脚本: backend/database/init.sql"
+    fi
+}
+
+# 设置 Python 环境
+setup_python_env() {
+    log_info "检查 Python 环境..."
+    
+    cd backend
+
+    # 检查 Python
+    if ! command -v python3 >/dev/null 2>&1; then
+        log_error "Python 3 未安装"
+        echo "请安装 Python 3: sudo apt install python3 python3-pip python3-venv"
         exit 1
-    }
-fi
+    fi
 
-# 激活虚拟环境
-source venv/bin/activate
+    log_success "Python 版本: $(python3 --version)"
 
-# 检查依赖
-if [ ! -f "venv/bin/flask" ]; then
-    echo "📦 安装 Python 依赖..."
-    pip3 install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple || pip3 install -r requirements.txt
-fi
+    # 创建虚拟环境
+    if [ ! -d "venv" ]; then
+        log_info "创建 Python 虚拟环境..."
+        if ! python3 -m venv venv; then
+            log_error "无法创建虚拟环境"
+            echo "请安装 python3-venv: sudo apt install python3-venv"
+            exit 1
+        fi
+        log_success "虚拟环境创建成功"
+    else
+        log_success "虚拟环境已存在"
+    fi
 
-echo "✅ Python 环境检查完成"
+    # 激活虚拟环境
+    source venv/bin/activate
+    log_success "虚拟环境已激活"
+
+    # 检查并安装依赖
+    if [ ! -f "requirements.txt" ]; then
+        log_warning "requirements.txt 不存在，创建基础依赖文件..."
+        cat > requirements.txt << 'EOF'
+flask>=2.0.0
+numpy>=1.21.0
+pandas>=1.3.0
+scikit-learn>=1.0.0
+sqlalchemy>=1.4.0
+pymysql>=1.0.0
+redis>=4.0.0
+EOF
+    fi
+
+    # 检查关键依赖
+    if ! python3 -c "import flask" >/dev/null 2>&1; then
+        log_info "安装 Python 依赖..."
+        if pip3 install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple; then
+            log_success "依赖安装完成"
+        else
+            log_warning "使用镜像安装失败，尝试官方源..."
+            pip3 install -r requirements.txt || {
+                log_error "依赖安装失败"
+                exit 1
+            }
+        fi
+    else
+        log_success "Python 依赖已安装"
+    fi
+}
 
 # 检查数据和模型
-echo "🔍 检查数据和模型..."
-if [ ! -f "models/recommender_model.pkl" ] || [ ! -d "data/processed" ]; then
-    echo "📊 初始化数据..."
-    python3 data/preprocessor.py || echo "⚠️  数据预处理失败，继续..."
+check_data_and_models() {
+    log_info "检查数据和模型..."
     
-    echo "🤖 训练推荐模型..."
-    python3 train_model.py || echo "⚠️  模型训练失败，继续..."
-fi
+    # 检查模型文件是否存在
+    if [ ! -f "models/recommender_model.pkl" ] && [ -f "train_model.py" ]; then
+        log_warning "模型文件不存在，训练模型..."
+        if python3 train_model.py; then
+            log_success "模型训练完成"
+        else
+            log_warning "模型训练失败，但继续启动"
+        fi
+    fi
 
-echo ""
-echo "=========================================="
-echo "🚀 启动后端服务..."
-echo "=========================================="
-echo ""
-echo "后端将在 http://localhost:5000 启动"
-echo "健康检查: http://localhost:5000/health"
-echo ""
-echo "按 Ctrl+C 停止服务"
-echo ""
+    # 检查处理后的数据
+    if [ ! -d "data/processed" ] && [ -f "data/preprocessor.py" ]; then
+        log_warning "处理后的数据不存在，执行数据预处理..."
+        if python3 data/preprocessor.py; then
+            log_success "数据预处理完成"
+        else
+            log_warning "数据预处理失败，但继续启动"
+        fi
+    fi
+}
 
-# 启动后端
-python3 app.py
+# 显示启动信息
+show_startup_info() {
+    echo ""
+    echo "=========================================="
+    log_info "启动后端服务..."
+    echo "=========================================="
+    echo ""
+    echo "后端将在 http://localhost:5000 启动"
+    echo "健康检查: http://localhost:5000/health"
+    echo ""
+    echo "项目目录: $(pwd)"
+    echo "Python 环境: $(which python3)"
+    echo ""
+    echo "按 Ctrl+C 停止服务"
+    echo ""
+}
 
+# 主函数
+main() {
+    log_info "开始启动后端服务..."
+    
+    check_mysql
+    check_redis
+    setup_database
+    setup_python_env
+    check_data_and_models
+    show_startup_info
+    
+    # 启动后端服务
+    log_info "启动 Flask 应用..."
+    python3 app.py
+}
+
+# 信号处理
+trap 'echo ""; log_info "后端服务已停止"; exit 0' INT TERM
+
+# 运行主函数
+main "$@"
