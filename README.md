@@ -63,35 +63,31 @@ docker-compose up -d --build
 - 前端: http://localhost:8080
 - 后端 API: http://localhost:5000
 
-#### 远端服务器部署
+#### 远端服务器部署（Ubuntu）
 
-1. **上传项目到服务器**
+**快速开始**（推荐）：
 ```bash
-# 使用 Git
+# 1. 连接到服务器
+ssh username@your-server-ip
+
+# 2. 安装 Docker（使用脚本）
+wget https://raw.githubusercontent.com/your-repo/GkSystem/main/install-docker-ubuntu.sh
+chmod +x install-docker-ubuntu.sh
+./install-docker-ubuntu.sh
+
+# 3. 上传项目（使用 Git）
 git clone <your-repo-url> GkSystem
 cd GkSystem
 
-# 或使用 SCP
-scp -r GkSystem username@server-ip:/path/to/
-```
-
-2. **运行部署脚本**
-```bash
+# 4. 运行部署脚本
 chmod +x deploy-remote.sh
 ./deploy-remote.sh
 ```
 
-3. **手动部署**
-```bash
-# 构建并启动
-docker-compose up -d --build
-
-# 初始化数据
-docker-compose exec backend python data/preprocessor.py
-docker-compose exec backend python train_model.py
-```
-
-详细部署文档请查看 [DOCKER_DEPLOY.md](./DOCKER_DEPLOY.md)
+**详细步骤**：
+1. 查看 [QUICK_START_UBUNTU.md](./QUICK_START_UBUNTU.md) - 快速部署指南
+2. 查看 [UBUNTU_DOCKER_SETUP.md](./UBUNTU_DOCKER_SETUP.md) - 完整 Ubuntu 部署文档
+3. 查看 [DOCKER_DEPLOY.md](./DOCKER_DEPLOY.md) - Docker 部署文档
 
 ## 📁 项目结构
 
