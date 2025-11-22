@@ -166,13 +166,76 @@ fi
 
 echo ""
 
-# 步骤3：测试网络连接
-log_info "步骤3: 测试网络连接..."
+# 步骤3：检查 DNS 和网络
+log_info "步骤3: 检查 DNS 和网络..."
+
+# 测试 DNS 解析
+test_dns() {
+    local domain=$1
+    if nslookup "$domain" >/dev/null 2>&1 || host "$domain" >/dev/null 2>&1 || dig +short "$domain" >/dev/null 2>&1; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# 测试 DNS
+log_info "测试 DNS 解析..."
+if test_dns "baidu.com"; then
+    log_success "DNS 解析正常"
+else
+    log_error "DNS 解析失败"
+    echo ""
+    log_info "修复 DNS 配置..."
+    
+    # 备份 DNS 配置
+    if [ -f "/etc/resolv.conf" ]; then
+        cp /etc/resolv.conf /etc/resolv.conf.bak.$(date +%Y%m%d_%H%M%S)
+    fi
+    
+    # 配置公共 DNS
+    tee /etc/resolv.conf > /dev/null <<EOF
+nameserver 8.8.8.8
+nameserver 8.8.4.4
+nameserver 114.114.114.114
+nameserver 223.5.5.5
+EOF
+    
+    log_success "DNS 配置已更新"
+    
+    # 重启 DNS 服务
+    if systemctl is-active systemd-resolved >/dev/null 2>&1; then
+        systemctl restart systemd-resolved
+        sleep 2
+    fi
+    
+    # 再次测试
+    if test_dns "baidu.com"; then
+        log_success "DNS 配置成功"
+    else
+        log_error "DNS 配置失败，请手动检查网络设置"
+        log_info "运行网络修复脚本: sudo ./fix-network-dns.sh"
+        exit 1
+    fi
+fi
+
+echo ""
+
+# 步骤4：测试网络连接
+log_info "步骤4: 测试镜像仓库连接..."
 
 # 测试镜像仓库连接
 test_registry() {
     local registry=$1
-    if curl -s --connect-timeout 5 "$registry" >/dev/null 2>&1; then
+    local domain=$(echo "$registry" | sed -e 's|https\?://||' -e 's|/.*||')
+    
+    # 先测试 DNS
+    if ! test_dns "$domain"; then
+        return 1
+    fi
+    
+    # 再测试 HTTP 连接
+    if curl -s --connect-timeout 5 --max-time 10 "$registry" >/dev/null 2>&1; then
         return 0
     else
         return 1
