@@ -32,12 +32,14 @@
           </div>
         </el-tab-pane>
         <el-tab-pane label="消费历史" name="history">
-          <div v-loading="historyLoading" class="history-section">
-            <div v-if="history.length === 0 && !historyLoading" class="empty-history">
+          <div class="history-section">
+            <!-- 骨架屏加载 -->
+            <el-skeleton v-if="historyLoading" :rows="8" animated />
+            <div v-else-if="history.length === 0" class="empty-history">
               <el-icon class="empty-icon"><DocumentDelete /></el-icon>
               <p>暂无消费历史记录</p>
             </div>
-            <el-table 
+            <el-table v-else 
               :data="history" 
               style="width: 100%"
               class="modern-table"

@@ -5,8 +5,25 @@
         <div v-if="recommendedDishes.length === 0 && !recommendationsLoading" class="empty-state">
           <el-icon class="empty-icon"><Box /></el-icon>
           <p>暂无推荐菜品，请先登录并评分一些菜品</p>
+          <el-button type="primary" @click="activeTab = 'all'" class="goto-dishes-btn">
+            去浏览菜品
+          </el-button>
         </div>
-        <div class="dishes-grid" v-loading="recommendationsLoading">
+        <!-- 骨架屏加载 -->
+        <div v-if="recommendationsLoading" class="dishes-grid skeleton-grid">
+          <el-skeleton v-for="n in 6" :key="n" animated class="skeleton-card">
+            <template #template>
+              <el-skeleton-item variant="rect" style="width: 100%; height: 220px;" />
+              <div style="padding: 20px;">
+                <el-skeleton-item variant="h3" style="width: 60%; margin-bottom: 12px;" />
+                <el-skeleton-item variant="text" style="width: 40%; margin-bottom: 8px;" />
+                <el-skeleton-item variant="text" style="width: 100%;" />
+                <el-skeleton-item variant="text" style="width: 80%; margin-top: 16px;" />
+              </div>
+            </template>
+          </el-skeleton>
+        </div>
+        <div class="dishes-grid" v-show="!recommendationsLoading">
           <el-card
             v-for="(dish, index) in recommendedDishes"
             :key="dish.id"
@@ -87,7 +104,20 @@
             />
           </el-select>
         </div>
-        <div class="dishes-grid" v-loading="dishesLoading">
+        <!-- 骨架屏加载 -->
+        <div v-if="dishesLoading" class="dishes-grid skeleton-grid">
+          <el-skeleton v-for="n in 8" :key="n" animated class="skeleton-card">
+            <template #template>
+              <el-skeleton-item variant="rect" style="width: 100%; height: 220px;" />
+              <div style="padding: 20px;">
+                <el-skeleton-item variant="h3" style="width: 60%; margin-bottom: 12px;" />
+                <el-skeleton-item variant="text" style="width: 40%; margin-bottom: 8px;" />
+                <el-skeleton-item variant="text" style="width: 100%;" />
+              </div>
+            </template>
+          </el-skeleton>
+        </div>
+        <div class="dishes-grid" v-show="!dishesLoading">
           <el-card
             v-for="(dish, index) in dishes"
             :key="dish.id"
@@ -409,14 +439,28 @@ onMounted(() => {
 
 .empty-state {
   text-align: center;
-  padding: 60px 20px;
+  padding: 80px 20px;
   color: #909399;
+  background: #fff;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
 }
 
 .empty-icon {
-  font-size: 64px;
-  margin-bottom: 16px;
-  opacity: 0.5;
+  font-size: 80px;
+  margin-bottom: 24px;
+  opacity: 0.3;
+  color: var(--primary-color);
+}
+
+.empty-state p {
+  font-size: 16px;
+  margin-bottom: 24px;
+  color: #606266;
+}
+
+.goto-dishes-btn {
+  margin-top: 8px;
 }
 
 .pagination-wrapper {
@@ -432,8 +476,39 @@ onMounted(() => {
   box-shadow: var(--shadow-sm);
 }
 
+.skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 24px;
+  margin-top: 20px;
+}
+
+.skeleton-card {
+  background: #fff;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+}
+
+/* 骨架屏动画 */
+:deep(.el-skeleton__item) {
+  background: linear-gradient(90deg, #f2f2f2 25%, #e6e6e6 50%, #f2f2f2 75%);
+  background-size: 400% 100%;
+  animation: skeleton-loading 1.4s ease infinite;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: -100% 50%;
+  }
+}
+
 @media (max-width: 768px) {
-  .dishes-grid {
+  .dishes-grid,
+  .skeleton-grid {
     grid-template-columns: 1fr;
     gap: 16px;
   }
