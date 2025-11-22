@@ -70,13 +70,41 @@ else
     log_info "使用 Docker Compose V1"
 fi
 
-# 检查 Docker 镜像加速器（可选）
+# 检查 Docker 镜像加速器（可选）并测试常用镜像仓库的连通性（但不在失败时退出脚本）
 if [ -f "/etc/docker/daemon.json" ] && grep -q "registry-mirrors" /etc/docker/daemon.json 2>/dev/null; then
     log_success "Docker 镜像加速器已配置"
 else
     log_warning "未检测到 Docker 镜像加速器配置"
     echo "  如果遇到镜像拉取超时，请运行: ./fix-deploy-issue.sh"
     echo "  或手动配置镜像加速器（参考 DOCKER_DEPLOY.md）"
+fi
+
+# 测试镜像仓库连通性（非致命，脚本继续执行）
+REG_MIRRORS=("https://docker.mirrors.ustc.edu.cn" "https://hub-mirror.c.163.com" "https://mirror.baidubce.com")
+MIRROR_OK=false
+for url in "${REG_MIRRORS[@]}"; do
+    log_info "测试镜像仓库连接: $url"
+    if curl -sSf --max-time 5 "$url" >/dev/null 2>&1; then
+        log_success "镜像仓库可用: $url"
+        MIRROR_OK=true
+        break
+    else
+        log_warning "镜像仓库不可用: $url"
+    fi
+done
+
+if ! $MIRROR_OK; then
+    log_warning "未检测到可用第三方镜像加速器，尝试连接 Docker Hub 直连..."
+    if curl -sSf --max-time 5 https://registry-1.docker.io/v2/ >/dev/null 2>&1; then
+        log_success "已能访问 Docker Hub（直连），将使用官方注册表"
+    else
+        log_error "无法连接到任何镜像仓库或 Docker Hub，网络或防火墙可能阻止访问"
+        echo "  建议:"
+        echo "    1) 检查云主机出站规则/防火墙，确保允许 HTTPS(443) 访问外网"
+        echo "    2) 若使用公司/校园网络，请配置 HTTP(S) 代理或联系网络管理员"
+        echo "    3) 可在可访问网络的机器上预先拉取镜像并导出为 tar，再导入到目标主机"
+        echo "  脚本将继续执行，但镜像拉取步骤可能失败，若失败请按上面建议排查网络问题。"
+    fi
 fi
 
 echo -e "${GREEN}✅ Docker 环境检查通过${NC}"
