@@ -28,6 +28,20 @@ uname -a
 
 ### 方法一：使用官方安装脚本（推荐）
 
+**如果遇到 GPG 密钥错误，先运行修复脚本：**
+
+```bash
+# 上传修复脚本到服务器
+scp fix-docker-gpg.sh username@your-server-ip:~/
+
+# 在服务器上运行修复脚本
+ssh username@your-server-ip
+chmod +x fix-docker-gpg.sh
+sudo ./fix-docker-gpg.sh
+```
+
+**然后继续安装：**
+
 ```bash
 # 更新系统包
 sudo apt-get update
@@ -39,9 +53,10 @@ sudo apt-get install -y \
     gnupg \
     lsb-release
 
-# 添加 Docker 官方 GPG 密钥
+# 添加 Docker 官方 GPG 密钥（如果修复脚本已运行，可以跳过）
 sudo mkdir -p /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
 # 设置 Docker 仓库
 echo \
@@ -496,6 +511,61 @@ docker-compose up -d backend
 ```
 
 ## 🐛 故障排查
+
+### 问题 0: GPG 密钥验证失败 (NO_PUBKEY 7EA0A9C3F273FCD8)
+
+**错误信息：**
+```
+The following signatures couldn't be verified because the public key is not available: NO_PUBKEY 7EA0A9C3F273FCD8
+```
+
+**解决方法：**
+
+方法一：使用修复脚本（推荐）
+```bash
+# 上传修复脚本
+scp fix-docker-gpg.sh username@your-server-ip:~/
+
+# 在服务器上运行
+ssh username@your-server-ip
+chmod +x fix-docker-gpg.sh
+sudo ./fix-docker-gpg.sh
+```
+
+方法二：手动修复
+```bash
+# 1. 清理旧的配置
+sudo rm -f /etc/apt/sources.list.d/docker.list
+sudo rm -f /etc/apt/keyrings/docker.gpg
+
+# 2. 安装必要工具
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl gnupg lsb-release
+
+# 3. 创建密钥目录
+sudo mkdir -p /etc/apt/keyrings
+
+# 4. 添加 GPG 密钥
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+
+# 5. 如果上面方法失败，尝试传统方法
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+
+# 6. 配置仓库
+ARCH=$(dpkg --print-architecture)
+DISTRO=$(lsb_release -cs)
+echo "deb [arch=$ARCH signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $DISTRO stable" | sudo tee /etc/apt/sources.list.d/docker.list
+
+# 7. 更新并验证
+sudo apt-get update
+```
+
+方法三：从密钥服务器导入（如果网络正常）
+```bash
+sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 7EA0A9C3F273FCD8
+sudo apt-get update
+```
 
 ### 问题 1: Docker 命令需要 sudo
 

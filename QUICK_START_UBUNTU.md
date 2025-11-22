@@ -8,13 +8,17 @@
 # 1. SSH 连接到 Ubuntu 服务器
 ssh username@your-server-ip
 
-# 2. 上传安装脚本（在本地执行）
-scp install-docker-ubuntu.sh username@your-server-ip:~/
+# 2. 上传脚本到服务器（在本地执行）
+scp install-docker-ubuntu.sh fix-docker-gpg.sh username@your-server-ip:~/
 
-# 3. 在服务器上运行安装脚本
+# 3. 如果遇到 GPG 密钥错误，先运行修复脚本（在服务器上）
 ssh username@your-server-ip
+chmod +x fix-docker-gpg.sh
+sudo ./fix-docker-gpg.sh
+
+# 4. 运行安装脚本
 chmod +x install-docker-ubuntu.sh
-./install-docker-ubuntu.sh
+sudo ./install-docker-ubuntu.sh
 
 # 4. 重新登录或执行以下命令使组更改生效
 newgrp docker

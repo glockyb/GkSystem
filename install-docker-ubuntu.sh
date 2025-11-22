@@ -51,18 +51,44 @@ apt-get install -y \
     software-properties-common \
     gnupg
 
-# Add Docker's official GPG key
+# Add Docker's official GPG key (修复 GPG 密钥问题)
 echo -e "${GREEN}Adding Docker's GPG key...${NC}"
-if ! curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg; then
-    echo -e "${RED}Failed to add Docker's GPG key.${NC}"
-    exit 1
+
+# 方法1: 使用新的密钥路径
+mkdir -p /etc/apt/keyrings
+if ! curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg; then
+    echo -e "${RED}Failed to add Docker's GPG key (method 1). Trying alternative method...${NC}"
+    
+    # 方法2: 使用传统方式添加密钥
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add - 2>/dev/null || {
+        echo -e "${RED}Failed to add Docker's GPG key.${NC}"
+        echo "尝试手动添加密钥..."
+        
+        # 方法3: 直接导入密钥ID
+        apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys 7EA0A9C3F273FCD8 || {
+            echo -e "${RED}所有方法都失败了。请手动添加 GPG 密钥。${NC}"
+            exit 1
+        }
+    }
+fi
+
+# 设置正确的密钥权限
+if [ -f /etc/apt/keyrings/docker.gpg ]; then
+    chmod a+r /etc/apt/keyrings/docker.gpg
 fi
 
 # Set up the stable repository
 echo -e "${GREEN}Setting up Docker repository...${NC}"
-echo \
-    "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
-    $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+ARCH=$(dpkg --print-architecture)
+DISTRO=$(lsb_release -cs)
+
+# 如果使用新方法
+if [ -f /etc/apt/keyrings/docker.gpg ]; then
+    echo "deb [arch=$ARCH signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $DISTRO stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+else
+    # 如果使用传统方法（apt-key）
+    echo "deb [arch=$ARCH] https://download.docker.com/linux/ubuntu $DISTRO stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+fi
 
 # Update package index again
 echo -e "${GREEN}Updating package index...${NC}"
