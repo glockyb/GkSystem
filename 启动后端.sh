@@ -184,87 +184,33 @@ EOF
 setup_python_env() {
     log_info "检查 Python 环境..."
     
-    # 首先检查backend目录是否存在
-    if [ ! -d "backend" ]; then
-        log_error "backend 目录不存在"
-        log_info "当前目录内容:"
-        ls -la
-        log_info "请确保在项目根目录运行脚本"
-        exit 1
-    fi
-
-    cd backend || {
-        log_error "无法进入 backend 目录"
-        exit 1
-    }
+    cd backend
 
     # 检查 Python
     if ! command -v python3 >/dev/null 2>&1; then
         log_error "Python 3 未安装"
-        echo "安装命令: sudo apt update && sudo apt install python3 python3-pip python3-venv"
+        echo "请安装 Python 3: sudo apt install python3 python3-pip python3-venv"
         exit 1
     fi
 
     log_success "Python 版本: $(python3 --version)"
 
-    # 检查并安装 python3-venv（在Ubuntu上需要单独安装）
-    if ! python3 -c "import ensurepip" &>/dev/null; then
-        log_warning "python3-venv 未安装，正在安装..."
-        if [ "$OS_TYPE" = "linux" ]; then
-            sudo apt update && sudo apt install -y python3-venv
-        fi
-    fi
-
     # 创建虚拟环境
     if [ ! -d "venv" ]; then
         log_info "创建 Python 虚拟环境..."
-        if python3 -m venv venv; then
-            log_success "虚拟环境创建成功"
-            # 检查虚拟环境结构
-            if [ ! -f "venv/bin/activate" ]; then
-                log_warning "虚拟环境结构异常，尝试修复..."
-                # 重新创建
-                rm -rf venv
-                python3 -m venv venv
-            fi
-        else
+        if ! python3 -m venv venv; then
             log_error "无法创建虚拟环境"
-            log_info "尝试使用 virtualenv..."
-            if command -v virtualenv >/dev/null 2>&1 || pip3 install virtualenv; then
-                virtualenv venv
-            else
-                log_error "virtualenv 也安装失败"
-                log_info "请手动安装: sudo apt install python3-venv 或 pip3 install virtualenv"
-                exit 1
-            fi
+            echo "请安装 python3-venv: sudo apt install python3-venv"
+            exit 1
         fi
+        log_success "虚拟环境创建成功"
     else
         log_success "虚拟环境已存在"
     fi
 
-    # 检查激活脚本是否存在
-    if [ ! -f "venv/bin/activate" ]; then
-        log_error "虚拟环境激活脚本不存在"
-        log_info "venv 目录内容:"
-        ls -la venv/ 2>/dev/null || echo "venv 目录不存在"
-        log_info "尝试重新创建虚拟环境..."
-        rm -rf venv
-        python3 -m venv venv
-    fi
-
     # 激活虚拟环境
-    log_info "激活虚拟环境..."
-    source venv/bin/activate || {
-        log_error "无法激活虚拟环境"
-        log_info "检查虚拟环境结构:"
-        find venv -name "activate" -type f 2>/dev/null
-        exit 1
-    }
+    source venv/bin/activate
     log_success "虚拟环境已激活"
-
-    # 升级pip
-    log_info "升级 pip..."
-    pip3 install --upgrade pip
 
     # 检查并安装依赖
     if [ ! -f "requirements.txt" ]; then
@@ -280,82 +226,22 @@ redis>=4.0.0
 EOF
     fi
 
-    log_info "安装 Python 依赖..."
-    if pip3 install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple; then
-        log_success "依赖安装完成"
-    else
-        log_warning "使用镜像安装失败，尝试官方源..."
-        pip3 install -r requirements.txt || {
-            log_error "依赖安装失败"
-            log_info "尝试逐个安装关键依赖..."
-            pip3 install flask numpy pandas scikit-learn sqlalchemy pymysql redis || {
-                log_error "关键依赖安装失败"
+    # 检查关键依赖
+    if ! python3 -c "import flask" >/dev/null 2>&1; then
+        log_info "安装 Python 依赖..."
+        if pip3 install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple; then
+            log_success "依赖安装完成"
+        else
+            log_warning "使用镜像安装失败，尝试官方源..."
+            pip3 install -r requirements.txt || {
+                log_error "依赖安装失败"
                 exit 1
             }
-        }
+        fi
+    else
+        log_success "Python 依赖已安装"
     fi
 }
-# setup_python_env() {
-#     log_info "检查 Python 环境..."
-    
-#     cd backend
-
-#     # 检查 Python
-#     if ! command -v python3 >/dev/null 2>&1; then
-#         log_error "Python 3 未安装"
-#         echo "请安装 Python 3: sudo apt install python3 python3-pip python3-venv"
-#         exit 1
-#     fi
-
-#     log_success "Python 版本: $(python3 --version)"
-
-#     # 创建虚拟环境
-#     if [ ! -d "venv" ]; then
-#         log_info "创建 Python 虚拟环境..."
-#         if ! python3 -m venv venv; then
-#             log_error "无法创建虚拟环境"
-#             echo "请安装 python3-venv: sudo apt install python3-venv"
-#             exit 1
-#         fi
-#         log_success "虚拟环境创建成功"
-#     else
-#         log_success "虚拟环境已存在"
-#     fi
-
-#     # 激活虚拟环境
-#     source venv/bin/activate
-#     log_success "虚拟环境已激活"
-
-#     # 检查并安装依赖
-#     if [ ! -f "requirements.txt" ]; then
-#         log_warning "requirements.txt 不存在，创建基础依赖文件..."
-#         cat > requirements.txt << 'EOF'
-# flask>=2.0.0
-# numpy>=1.21.0
-# pandas>=1.3.0
-# scikit-learn>=1.0.0
-# sqlalchemy>=1.4.0
-# pymysql>=1.0.0
-# redis>=4.0.0
-# EOF
-#     fi
-
-#     # 检查关键依赖
-#     if ! python3 -c "import flask" >/dev/null 2>&1; then
-#         log_info "安装 Python 依赖..."
-#         if pip3 install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple; then
-#             log_success "依赖安装完成"
-#         else
-#             log_warning "使用镜像安装失败，尝试官方源..."
-#             pip3 install -r requirements.txt || {
-#                 log_error "依赖安装失败"
-#                 exit 1
-#             }
-#         fi
-#     else
-#         log_success "Python 依赖已安装"
-#     fi
-# }
 
 # 检查数据和模型
 check_data_and_models() {
