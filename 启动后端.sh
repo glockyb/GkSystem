@@ -1,7 +1,8 @@
 #!/bin/bash
-# 启动后端服务的完整脚本 (Ubuntu 版本)
+# 启动后端服务的完整脚本
+# 适用于本地开发和测试环境（Ubuntu/Debian/macOS）
 
-set -e
+set -e  # 遇到错误立即退出
 
 echo "=========================================="
 echo "启动后端服务 (Ubuntu 版本)"
@@ -24,42 +25,81 @@ log_success() { echo -e "${GREEN}SUCCESS: $1${NC}"; }
 log_warning() { echo -e "${YELLOW}WARNING: $1${NC}"; }
 log_error() { echo -e "${RED}ERROR: $1${NC}"; }
 
+# 检测操作系统类型
+detect_os() {
+    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+        OS_TYPE="linux"
+        # 检测 Linux 发行版
+        if [ -f /etc/os-release ]; then
+            . /etc/os-release
+            OS_DISTRO=$ID
+        fi
+    elif [[ "$OSTYPE" == "darwin"* ]]; then
+        OS_TYPE="macos"
+    else
+        OS_TYPE="unknown"
+    fi
+}
+
 # 检查 MySQL
 check_mysql() {
     log_info "检查 MySQL..."
     
     if ! command -v mysql >/dev/null 2>&1; then
         log_error "MySQL 未安装"
-        echo "请先安装 MySQL: sudo apt install mysql-server"
+        if [ "$OS_TYPE" == "macos" ]; then
+            echo "请先安装 MySQL: brew install mysql"
+        else
+            echo "请先安装 MySQL: sudo apt install mysql-server"
+        fi
         exit 1
     fi
 
-    # 检查 MySQL 服务状态
-    if ! sudo systemctl is-active mysql >/dev/null 2>&1; then
-        log_warning "MySQL 服务未启动，正在启动..."
-        sudo systemctl start mysql
-        if ! sudo systemctl is-active mysql >/dev/null 2>&1; then
-            log_error "无法启动 MySQL 服务"
-            echo "请手动启动: sudo systemctl start mysql"
-            exit 1
+    # 根据操作系统类型检查服务状态
+    if [ "$OS_TYPE" == "macos" ]; then
+        # macOS 使用 brew services
+        if ! brew services list 2>/dev/null | grep -q "mysql.*started"; then
+            log_warning "MySQL 服务未启动，正在启动..."
+            brew services start mysql || {
+                log_error "无法启动 MySQL 服务"
+                echo "请手动启动: brew services start mysql"
+                exit 1
+            }
+            log_info "等待 MySQL 启动（5秒）..."
+            sleep 5
+        else
+            log_success "MySQL 服务运行中"
         fi
-        log_info "等待 MySQL 启动（5秒）..."
-        sleep 5
-    else
-        log_success "MySQL 服务运行中"
-    fi
-
-    # 测试 MySQL 连接
-    if ! mysql -u root -e "SELECT 1;" >/dev/null 2>&1; then
-        log_warning "MySQL 连接测试失败，尝试使用 sudo..."
-        if ! sudo mysql -u root -e "SELECT 1;" >/dev/null 2>&1; then
-            log_error "无法连接到 MySQL"
-            echo "请检查 MySQL 配置和权限"
-            exit 1
-        fi
-        MYSQL_PREFIX="sudo "
-    else
         MYSQL_PREFIX=""
+    else
+        # Linux 使用 systemctl
+        if command -v systemctl >/dev/null 2>&1; then
+            if ! sudo systemctl is-active mysql >/dev/null 2>&1 && ! sudo systemctl is-active mysqld >/dev/null 2>&1; then
+                log_warning "MySQL 服务未启动，正在启动..."
+                sudo systemctl start mysql 2>/dev/null || sudo systemctl start mysqld 2>/dev/null || {
+                    log_error "无法启动 MySQL 服务"
+                    echo "请手动启动: sudo systemctl start mysql"
+                    exit 1
+                }
+                log_info "等待 MySQL 启动（5秒）..."
+                sleep 5
+            else
+                log_success "MySQL 服务运行中"
+            fi
+        fi
+        
+        # 测试 MySQL 连接
+        if ! mysql -u root -e "SELECT 1;" >/dev/null 2>&1; then
+            log_warning "MySQL 连接测试失败，尝试使用 sudo..."
+            if ! sudo mysql -u root -e "SELECT 1;" >/dev/null 2>&1; then
+                log_warning "无法使用 root 连接，可能需要密码"
+                MYSQL_PREFIX=""
+            else
+                MYSQL_PREFIX="sudo "
+            fi
+        else
+            MYSQL_PREFIX=""
+        fi
     fi
 }
 
@@ -67,23 +107,43 @@ check_mysql() {
 check_redis() {
     log_info "检查 Redis..."
     
-    if command -v redis-cli >/dev/null 2>&1; then
-        if ! sudo systemctl is-active redis-server >/dev/null 2>&1; then
+    if ! command -v redis-cli >/dev/null 2>&1; then
+        log_warning "Redis 未安装（可选，推荐功能需要）"
+        if [ "$OS_TYPE" == "macos" ]; then
+            echo "安装 Redis: brew install redis"
+        else
+            echo "安装 Redis: sudo apt install redis-server"
+        fi
+        return
+    fi
+    
+    if [ "$OS_TYPE" == "macos" ]; then
+        # macOS 使用 brew services
+        if ! brew services list 2>/dev/null | grep -q "redis.*started"; then
             log_warning "Redis 服务未启动，正在启动..."
-            sudo systemctl start redis-server || log_warning "Redis 启动失败，继续..."
+            brew services start redis 2>/dev/null || log_warning "Redis 启动失败，继续..."
             sleep 2
         else
             log_success "Redis 服务运行中"
         fi
-        
-        # 测试 Redis 连接
-        if redis-cli ping >/dev/null 2>&1; then
-            log_success "Redis 连接正常"
-        else
-            log_warning "Redis 连接失败，但继续启动"
-        fi
     else
-        log_warning "Redis 未安装（可选，推荐功能需要）"
+        # Linux 使用 systemctl
+        if command -v systemctl >/dev/null 2>&1; then
+            if ! sudo systemctl is-active redis >/dev/null 2>&1 && ! sudo systemctl is-active redis-server >/dev/null 2>&1; then
+                log_warning "Redis 服务未启动，正在启动..."
+                sudo systemctl start redis 2>/dev/null || sudo systemctl start redis-server 2>/dev/null || log_warning "Redis 启动失败，继续..."
+                sleep 2
+            else
+                log_success "Redis 服务运行中"
+            fi
+        fi
+    fi
+    
+    # 测试 Redis 连接
+    if redis-cli ping >/dev/null 2>&1; then
+        log_success "Redis 连接正常"
+    else
+        log_warning "Redis 连接失败，但继续启动（可选服务）"
     fi
 }
 
@@ -229,6 +289,7 @@ show_startup_info() {
 main() {
     log_info "开始启动后端服务..."
     
+    detect_os
     check_mysql
     check_redis
     setup_database
