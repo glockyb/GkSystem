@@ -204,7 +204,37 @@ fi
 log_info "安装 Python 依赖..."
 source venv/bin/activate
 pip3 install --upgrade pip
-pip3 install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple || pip3 install -r requirements.txt
+
+# 尝试多个镜像源安装依赖
+log_info "尝试从多个镜像源安装依赖..."
+MIRRORS=(
+    "https://pypi.tuna.tsinghua.edu.cn/simple"
+    "https://mirrors.aliyun.com/pypi/simple"
+    "https://pypi.douban.com/simple"
+    "https://pypi.org/simple"
+)
+
+INSTALLED=false
+for mirror in "${MIRRORS[@]}"; do
+    log_info "尝试使用镜像源: $mirror"
+    if pip3 install -r requirements.txt -i "$mirror" --trusted-host "$(echo $mirror | sed 's|https\?://||' | sed 's|/.*||')" 2>&1 | tee /tmp/pip_install.log; then
+        log_success "依赖安装成功（使用镜像源: $mirror）"
+        INSTALLED=true
+        break
+    else
+        log_warning "镜像源 $mirror 安装失败，尝试下一个..."
+    fi
+done
+
+# 如果所有镜像源都失败，尝试官方源
+if [ "$INSTALLED" = false ]; then
+    log_warning "所有镜像源都失败，尝试官方 PyPI 源..."
+    pip3 install -r requirements.txt || {
+        log_error "依赖安装失败，请检查网络连接和 requirements.txt"
+        log_info "查看详细错误信息: cat /tmp/pip_install.log"
+        exit 1
+    }
+fi
 
 # 创建 .env 文件
 log_info "创建后端环境变量文件..."
