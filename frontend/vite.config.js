@@ -13,7 +13,7 @@ export default defineConfig({
     port: 8080,
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        target: process.env.VITE_API_URL || 'http://localhost:5000',
         changeOrigin: true
       }
     }
@@ -22,5 +22,9 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: false,
     chunkSizeWarningLimit: 1000
+  },
+  // 生产环境变量
+  define: {
+    __API_URL__: JSON.stringify(process.env.VITE_API_URL || '/api/v1')
   }
 })

@@ -41,5 +41,13 @@ if __name__ == '__main__':
     # 确保模型目录存在
     os.makedirs('models', exist_ok=True)
     
+    # 获取运行模式
+    debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    
     # 启动应用
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # 生产环境：host='127.0.0.1'（只允许本地访问，通过 Nginx 代理）
+    # 开发环境：host='0.0.0.0'（允许外部访问）
+    host = os.environ.get('FLASK_HOST', '127.0.0.1' if not debug_mode else '0.0.0.0')
+    port = int(os.environ.get('FLASK_PORT', 5000))
+    
+    app.run(host=host, port=port, debug=debug_mode)

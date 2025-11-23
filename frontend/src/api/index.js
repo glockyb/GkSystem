@@ -1,7 +1,19 @@
 import axios from 'axios'
 
+// 获取 API 地址
+// 开发环境：使用相对路径（通过 Vite proxy）
+// 生产环境：使用环境变量或相对路径（通过 Nginx proxy）
+const getApiBaseURL = () => {
+  // 如果设置了环境变量，使用环境变量
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL + '/api/v1'
+  }
+  // 否则使用相对路径（通过 Nginx 代理）
+  return '/api/v1'
+}
+
 const api = axios.create({
-  baseURL: '/api/v1',
+  baseURL: getApiBaseURL(),
   timeout: 10000
 })
 
