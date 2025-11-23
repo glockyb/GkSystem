@@ -45,8 +45,8 @@ echo ""
 echo "配置信息:"
 echo "  服务器内网 IP: $SERVER_IP"
 echo "  服务器公网 IP: $PUBLIC_IP"
-echo "  前端访问地址: http://$PUBLIC_IP:8080"
-echo "  后端 API 地址: http://$PUBLIC_IP:5000"
+echo "  前端访问地址: http://$PUBLIC_IP (通过 Nginx)"
+echo "  后端 API 地址: http://$PUBLIC_IP:5000 (直接访问，可选)"
 echo ""
 
 read -p "是否继续部署? (y/n) " -n 1 -r
@@ -86,11 +86,40 @@ if command -v apt-get >/dev/null 2>&1; then
     
     # Ubuntu 20.04 默认 Node.js 版本可能较旧，需要添加 NodeSource 仓库
     log_info "配置 Node.js 仓库..."
-    if ! command -v node >/dev/null 2>&1 || ! node --version | grep -q "v1[6-9]\|v2[0-9]"; then
+    if ! command -v node >/dev/null 2>&1 || ! node --version 2>/dev/null | grep -q "v1[6-9]\|v2[0-9]"; then
         log_info "安装 Node.js 18.x..."
-        curl -fsSL https://deb.nodesource.com/setup_18.x | $SUDO -E bash -
+        # 检查是否已安装 Node.js 18+
+        NEED_NODEJS=true
+        if command -v node >/dev/null 2>&1; then
+            NODE_VERSION=$(node --version 2>/dev/null || echo "")
+            if echo "$NODE_VERSION" | grep -q "v1[6-9]\|v2[0-9]"; then
+                log_info "Node.js 版本已满足要求: $NODE_VERSION"
+                NEED_NODEJS=false
+            fi
+        fi
+        
+        if [ "$NEED_NODEJS" = true ]; then
+            log_info "添加 NodeSource 仓库..."
+            if [ -n "$SUDO" ]; then
+                curl -fsSL https://deb.nodesource.com/setup_18.x | $SUDO bash -
+            else
+                curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+            fi
+        fi
+    else
+        log_info "Node.js 已安装且版本满足要求"
     fi
     
+    # 先安装基础工具（包括 curl，用于下载 Node.js 仓库脚本）
+    $SUDO apt-get install -y curl git build-essential
+    
+    # 如果 Node.js 需要安装，先配置仓库
+    if [ "$NEED_NODEJS" = true ] 2>/dev/null; then
+        log_info "安装 Node.js 18.x..."
+        $SUDO apt-get install -y nodejs
+    fi
+    
+    # 安装其他依赖
     $SUDO apt-get install -y \
         python3 \
         python3-pip \
@@ -99,8 +128,6 @@ if command -v apt-get >/dev/null 2>&1; then
         redis-server \
         nginx \
         nodejs \
-        curl \
-        git \
         build-essential
 elif command -v yum >/dev/null 2>&1; then
     log_info "使用 yum 安装依赖（CentOS/RHEL）..."
