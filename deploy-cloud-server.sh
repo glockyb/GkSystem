@@ -264,15 +264,37 @@ log_info "步骤6: 配置前端..."
 
 cd frontend
 
-# 安装依赖
-if [ ! -d "node_modules" ]; then
-    log_info "安装前端依赖..."
-    npm install --registry=https://registry.npmmirror.com || npm install
+# 检查并清理 node_modules（如果是从其他平台复制的）
+if [ -d "node_modules" ]; then
+    log_warning "检测到 node_modules 目录，可能是从其他平台复制的"
+    log_info "清理 node_modules 以确保平台兼容性..."
+    rm -rf node_modules
+    rm -f package-lock.json
+    log_success "已清理 node_modules"
 fi
+
+# 安装依赖（在 Linux 平台上）
+log_info "在 Linux 平台上安装前端依赖..."
+npm install --registry=https://registry.npmmirror.com || npm install
+
+# 验证安装
+if [ ! -d "node_modules" ]; then
+    log_error "前端依赖安装失败"
+    exit 1
+fi
+
+log_success "前端依赖安装完成"
 
 # 构建前端
 log_info "构建前端生产版本..."
 npm run build
+
+if [ ! -d "dist" ]; then
+    log_error "前端构建失败"
+    exit 1
+fi
+
+log_success "前端构建完成"
 
 # 创建前端环境变量文件（用于构建时）
 log_info "创建前端环境变量文件..."
