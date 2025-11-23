@@ -420,25 +420,77 @@ $SUDO systemctl start canteen-backend
 log_success "服务配置完成"
 echo ""
 
-# 步骤9：初始化数据
-log_info "步骤9: 初始化数据..."
+# 步骤9：验证 Python 依赖安装
+log_info "步骤9: 验证 Python 依赖安装..."
+
+cd backend
+source venv/bin/activate
+
+# 检查关键依赖
+log_info "检查关键依赖..."
+if ! python3 -c "import pandas" 2>/dev/null; then
+    log_error "pandas 未安装，重新安装依赖..."
+    pip3 install --upgrade pip
+    pip3 install pandas>=2.0.0,<2.1.0 -i https://pypi.tuna.tsinghua.edu.cn/simple || \
+    pip3 install pandas>=2.0.0,<2.1.0 -i https://mirrors.aliyun.com/pypi/simple || \
+    pip3 install pandas>=2.0.0,<2.1.0
+    
+    # 重新安装所有依赖
+    pip3 install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple || \
+    pip3 install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple || \
+    pip3 install -r requirements.txt
+fi
+
+# 验证关键依赖
+REQUIRED_MODULES=("pandas" "numpy" "flask" "pymysql" "redis")
+MISSING_MODULES=()
+
+for module in "${REQUIRED_MODULES[@]}"; do
+    if ! python3 -c "import $module" 2>/dev/null; then
+        MISSING_MODULES+=("$module")
+    fi
+done
+
+if [ ${#MISSING_MODULES[@]} -gt 0 ]; then
+    log_error "缺少以下模块: ${MISSING_MODULES[*]}"
+    log_info "重新安装所有依赖..."
+    pip3 install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple || \
+    pip3 install -r requirements.txt
+else
+    log_success "所有关键依赖已安装"
+fi
+
+cd ..
+echo ""
+
+# 步骤10：初始化数据
+log_info "步骤10: 初始化数据..."
 
 sleep 5  # 等待后端启动
 
 log_info "执行数据预处理..."
 cd backend
 source venv/bin/activate
-python3 data/preprocessor.py || log_warning "数据预处理可能已有数据或遇到错误，继续..."
+
+if python3 data/preprocessor.py 2>&1; then
+    log_success "数据预处理完成"
+else
+    log_warning "数据预处理可能已有数据或遇到错误，继续..."
+fi
 
 echo ""
 log_info "训练推荐模型..."
-python3 train_model.py || log_warning "模型训练可能遇到错误，继续..."
+if python3 train_model.py 2>&1; then
+    log_success "模型训练完成"
+else
+    log_warning "模型训练可能遇到错误，继续..."
+fi
 
 cd ..
 echo ""
 
-# 步骤10：配置防火墙
-log_info "步骤10: 配置防火墙..."
+# 步骤11：配置防火墙
+log_info "步骤11: 配置防火墙..."
 
 if command -v ufw >/dev/null 2>&1; then
     log_info "配置 UFW 防火墙..."
@@ -457,8 +509,8 @@ fi
 log_success "防火墙配置完成"
 echo ""
 
-# 步骤11：验证服务
-log_info "步骤11: 验证服务状态..."
+# 步骤12：验证服务
+log_info "步骤12: 验证服务状态..."
 
 sleep 3
 
