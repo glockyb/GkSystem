@@ -39,11 +39,11 @@
               <el-icon class="empty-icon"><DocumentDelete /></el-icon>
               <p>暂无消费历史记录</p>
             </div>
-            <el-table v-else 
+            <el-table 
+              v-else
               :data="history" 
               style="width: 100%"
               class="modern-table"
-              v-else
             >
               <el-table-column prop="dish_name" label="菜品名称" width="200">
                 <template #default="{ row }">
