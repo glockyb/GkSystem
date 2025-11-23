@@ -1,7 +1,7 @@
 #!/bin/bash
-# ubuntu_20_04_deps.sh - Ubuntu 20.04 依赖安装
+# ubuntu_20_04_deps_fixed.sh - 修复版 Ubuntu 20.04 依赖安装
 
-echo "=== Ubuntu 20.04 依赖安装 ==="
+echo "=== Ubuntu 20.04 依赖安装 (修复版) ==="
 
 cd /root/gksys/backend
 
@@ -19,8 +19,9 @@ source venv/bin/activate
 echo "3. 升级基础工具..."
 pip3 install --upgrade pip setuptools wheel
 
-# 配置pip使用国内镜像
+# 修复：创建 pip 配置目录
 echo "4. 配置pip镜像..."
+mkdir -p ~/.pip
 cat > ~/.pip/pip.conf << 'EOF'
 [global]
 index-url = https://pypi.tuna.tsinghua.edu.cn/simple
@@ -28,6 +29,8 @@ trusted-host = pypi.tuna.tsinghua.edu.cn
 timeout = 120
 retries = 5
 EOF
+
+echo "✓ Pip 配置已创建"
 
 echo "5. 安装兼容的包版本..."
 
