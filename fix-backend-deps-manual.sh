@@ -136,14 +136,39 @@ fi
 
 # 7. 安装 surprise（注意包名是 scikit-surprise）
 log_info "7. 安装 surprise..."
-$VENV_PIP install "scikit-surprise" -i https://pypi.tuna.tsinghua.edu.cn/simple || \
-$VENV_PIP install scikit-surprise
+log_warning "surprise 可能需要特殊处理，先安装构建依赖..."
+
+# 先安装构建依赖
+$VENV_PIP install Cython numpy
+
+# 尝试安装预编译包
+if $VENV_PIP install scikit-surprise --only-binary :all: -i https://pypi.tuna.tsinghua.edu.cn/simple 2>/dev/null; then
+    if $VENV_PYTHON -c "import surprise" 2>/dev/null; then
+        log_success "surprise 安装成功（预编译包）"
+    else
+        log_warning "预编译包安装失败，尝试其他方法..."
+        # 运行专门的修复脚本
+        if [ -f "$SCRIPT_DIR/fix-surprise-install.sh" ]; then
+            log_info "运行 surprise 安装修复脚本..."
+            bash "$SCRIPT_DIR/fix-surprise-install.sh"
+        else
+            log_warning "跳过 surprise，使用替代实现"
+        fi
+    fi
+else
+    log_warning "预编译包不可用，运行修复脚本..."
+    if [ -f "$SCRIPT_DIR/fix-surprise-install.sh" ]; then
+        bash "$SCRIPT_DIR/fix-surprise-install.sh"
+    else
+        log_warning "跳过 surprise，使用替代实现"
+    fi
+fi
 
 # 验证
-if $VENV_PYTHON -c "import surprise; print('surprise OK')" 2>/dev/null; then
-    log_success "surprise 安装成功"
+if $VENV_PYTHON -c "import surprise" 2>/dev/null; then
+    log_success "surprise 可用"
 else
-    log_warning "surprise 安装可能失败，但继续..."
+    log_warning "surprise 不可用，但继续（推荐功能可能受限）"
 fi
 
 # 8. 安装其他依赖
