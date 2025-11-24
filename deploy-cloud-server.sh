@@ -326,6 +326,14 @@ fi
 
 log_success "前端构建完成"
 
+# 将前端文件复制到标准位置（避免 /root 目录权限问题）
+log_info "将前端文件部署到标准位置..."
+$SUDO mkdir -p /var/www/canteen
+$SUDO cp -r dist/* /var/www/canteen/
+$SUDO chown -R www-data:www-data /var/www/canteen
+$SUDO chmod -R 755 /var/www/canteen
+log_success "前端文件已部署到 /var/www/canteen"
+
 # 创建前端环境变量文件（用于构建时）
 log_info "创建前端环境变量文件..."
 cat > .env.production <<EOF
@@ -344,9 +352,22 @@ log_info "步骤7: 配置 Nginx 反向代理..."
 
 NGINX_CONFIG="/etc/nginx/sites-available/canteen"
 PROJECT_PATH="$SCRIPT_DIR"
-USER_HOME=$(eval echo ~$USER)
+FRONTEND_DIST="$PROJECT_PATH/frontend/dist"
+TARGET_DIR="/var/www/canteen"
 
-# 使用绝对路径
+# 将前端文件复制到标准位置（避免 /root 目录权限问题）
+log_info "将前端文件复制到标准位置..."
+$SUDO mkdir -p "$TARGET_DIR"
+if [ -d "$FRONTEND_DIST" ] && [ -f "$FRONTEND_DIST/index.html" ]; then
+    $SUDO cp -r "$FRONTEND_DIST"/* "$TARGET_DIR/" 2>/dev/null || true
+    $SUDO chown -R www-data:www-data "$TARGET_DIR"
+    $SUDO chmod -R 755 "$TARGET_DIR"
+    log_success "前端文件已复制到 $TARGET_DIR"
+else
+    log_warning "前端文件不存在，稍后需要构建"
+fi
+
+# 使用标准位置创建 Nginx 配置
 $SUDO tee "$NGINX_CONFIG" > /dev/null <<EOF
 server {
     listen 80;
@@ -356,9 +377,9 @@ server {
     access_log /var/log/nginx/canteen-access.log;
     error_log /var/log/nginx/canteen-error.log;
 
-    # 前端静态文件
+    # 前端静态文件（使用标准位置）
     location / {
-        root $PROJECT_PATH/frontend/dist;
+        root $TARGET_DIR;
         index index.html;
         try_files \$uri \$uri/ /index.html;
         
