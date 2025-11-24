@@ -315,8 +315,20 @@ fi
 
 log_success "前端依赖安装完成"
 
-# 构建前端
-log_info "构建前端生产版本..."
+# 构建前端（不使用环境变量，使用相对路径通过 Nginx 代理）
+log_info "构建前端生产版本（使用相对路径 /api/v1）..."
+log_info "注意：前端将通过 Nginx 代理访问后端，不需要直接访问 5000 端口"
+
+# 确保不设置 VITE_API_URL，让前端使用相对路径
+unset VITE_API_URL
+export VITE_API_URL=""
+
+# 删除可能存在的 .env.production 文件（如果之前设置了错误的 URL）
+if [ -f ".env.production" ]; then
+    log_warning "发现旧的 .env.production 文件，删除..."
+    rm -f .env.production
+fi
+
 npm run build
 
 if [ ! -d "dist" ]; then
@@ -324,7 +336,7 @@ if [ ! -d "dist" ]; then
     exit 1
 fi
 
-log_success "前端构建完成"
+log_success "前端构建完成（使用相对路径）"
 
 # 将前端文件复制到标准位置（避免 /root 目录权限问题）
 log_info "将前端文件部署到标准位置..."
@@ -333,12 +345,6 @@ $SUDO cp -r dist/* /var/www/canteen/
 $SUDO chown -R www-data:www-data /var/www/canteen
 $SUDO chmod -R 755 /var/www/canteen
 log_success "前端文件已部署到 /var/www/canteen"
-
-# 创建前端环境变量文件（用于构建时）
-log_info "创建前端环境变量文件..."
-cat > .env.production <<EOF
-VITE_API_URL=http://$PUBLIC_IP:5000
-EOF
 
 # 注意：如果使用 Nginx 代理，前端使用相对路径即可
 # 这里设置的是直接访问后端的情况
