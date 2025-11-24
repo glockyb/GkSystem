@@ -60,6 +60,25 @@ $VENV_PIP uninstall -y pandas numpy flask pymysql redis scikit-learn surprise 2>
 # 逐个安装关键模块
 log_info "逐个安装关键模块..."
 
+# 0. 检查并安装系统依赖（Python 开发头文件）
+log_info "0. 检查系统依赖..."
+if [ "$EUID" -eq 0 ]; then
+    SUDO=""
+else
+    SUDO="sudo"
+fi
+
+# 检查 Python.h
+if ! python3 -c "import sysconfig; import os; assert os.path.exists(os.path.join(sysconfig.get_path('include'), 'Python.h'))" 2>/dev/null; then
+    log_warning "Python 开发头文件未找到，尝试安装..."
+    if command -v apt-get >/dev/null 2>&1; then
+        $SUDO apt-get update
+        $SUDO apt-get install -y python3-dev build-essential gcc g++ || log_warning "系统依赖安装可能失败"
+    elif command -v yum >/dev/null 2>&1; then
+        $SUDO yum install -y python3-devel gcc gcc-c++ make || log_warning "系统依赖安装可能失败"
+    fi
+fi
+
 # 1. 安装基础依赖
 log_info "1. 安装 setuptools 和 wheel..."
 $VENV_PIP install --upgrade setuptools wheel -i https://pypi.tuna.tsinghua.edu.cn/simple || \

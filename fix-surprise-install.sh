@@ -34,8 +34,44 @@ fi
 PYTHON_VERSION=$($VENV_PYTHON --version)
 log_info "Python 版本: $PYTHON_VERSION"
 
-# 方法1：先安装构建依赖
-log_info "方法1: 安装构建依赖..."
+# 方法1：先安装系统构建依赖
+log_info "方法1: 安装系统构建依赖..."
+
+# 检查并安装 Python 开发头文件
+if [ "$EUID" -eq 0 ]; then
+    SUDO=""
+else
+    SUDO="sudo"
+fi
+
+PYTHON_VERSION=$($VENV_PYTHON --version 2>&1 | awk '{print $2}' | cut -d. -f1,2)
+PYTHON_MAJOR=$(echo $PYTHON_VERSION | cut -d. -f1)
+PYTHON_MINOR=$(echo $PYTHON_VERSION | cut -d. -f2)
+
+log_info "检测到 Python 版本: $PYTHON_VERSION"
+
+# 安装 Python 开发头文件
+if command -v apt-get >/dev/null 2>&1; then
+    log_info "安装 Python 开发头文件（Ubuntu/Debian）..."
+    $SUDO apt-get update
+    $SUDO apt-get install -y "python${PYTHON_MAJOR}.${PYTHON_MINOR}-dev" || \
+    $SUDO apt-get install -y python3-dev || \
+    $SUDO apt-get install -y python-dev
+    
+    # 安装编译工具
+    $SUDO apt-get install -y build-essential gcc g++ || true
+elif command -v yum >/dev/null 2>&1; then
+    log_info "安装 Python 开发头文件（CentOS/RHEL）..."
+    $SUDO yum install -y "python${PYTHON_MAJOR}${PYTHON_MINOR}-devel" || \
+    $SUDO yum install -y python3-devel || \
+    $SUDO yum install -y python-devel
+    
+    # 安装编译工具
+    $SUDO yum groupinstall -y "Development Tools" || true
+fi
+
+# 安装 Python 构建依赖
+log_info "安装 Python 构建依赖..."
 $VENV_PIP install --upgrade pip setuptools wheel
 $VENV_PIP install Cython numpy
 

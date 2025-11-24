@@ -124,11 +124,14 @@ if command -v apt-get >/dev/null 2>&1; then
         python3 \
         python3-pip \
         python3-venv \
+        python3-dev \
         mysql-server \
         redis-server \
         nginx \
         nodejs \
-        build-essential
+        build-essential \
+        gcc \
+        g++
 elif command -v yum >/dev/null 2>&1; then
     log_info "使用 yum 安装依赖（CentOS/RHEL）..."
     $SUDO yum install -y \
