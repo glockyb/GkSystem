@@ -194,10 +194,37 @@ log_info "步骤5: 配置后端..."
 
 cd backend
 
+# 检查 Python 版本
+PYTHON_VERSION=$(python3 --version 2>&1 | awk '{print $2}')
+log_info "检测到 Python 版本: $PYTHON_VERSION"
+
+# 检查是否有 Python 3.9+
+if command -v python3.9 >/dev/null 2>&1; then
+    PYTHON_CMD="python3.9"
+    log_info "使用 Python 3.9"
+elif command -v python3.10 >/dev/null 2>&1; then
+    PYTHON_CMD="python3.10"
+    log_info "使用 Python 3.10"
+else
+    PYTHON_CMD="python3"
+    log_warning "使用默认 Python 3，建议使用 Python 3.9+"
+fi
+
 # 创建虚拟环境
 if [ ! -d "venv" ]; then
-    log_info "创建 Python 虚拟环境..."
-    python3 -m venv venv
+    log_info "创建 Python 虚拟环境（使用 $PYTHON_CMD）..."
+    $PYTHON_CMD -m venv venv
+else
+    log_info "虚拟环境已存在，检查 Python 版本..."
+    VENV_PYTHON_VERSION=$(venv/bin/python3 --version 2>&1 | awk '{print $2}')
+    log_info "虚拟环境 Python 版本: $VENV_PYTHON_VERSION"
+    
+    # 如果虚拟环境使用的是 Python 3.8，且系统有 Python 3.9+，重新创建
+    if echo "$VENV_PYTHON_VERSION" | grep -q "^3\.8" && command -v python3.9 >/dev/null 2>&1; then
+        log_warning "虚拟环境使用 Python 3.8，重新创建使用 Python 3.9..."
+        rm -rf venv
+        python3.9 -m venv venv
+    fi
 fi
 
 # 激活虚拟环境并安装依赖
@@ -431,9 +458,11 @@ log_info "检查关键依赖..."
 if ! python3 -c "import pandas" 2>/dev/null; then
     log_error "pandas 未安装，重新安装依赖..."
     pip3 install --upgrade pip
-    pip3 install pandas>=2.0.0,<2.1.0 -i https://pypi.tuna.tsinghua.edu.cn/simple || \
-    pip3 install pandas>=2.0.0,<2.1.0 -i https://mirrors.aliyun.com/pypi/simple || \
-    pip3 install pandas>=2.0.0,<2.1.0
+    
+    # 注意：版本号需要用引号包裹，避免 shell 解释 < 为重定向
+    pip3 install "pandas>=2.0.0,<2.1.0" -i https://pypi.tuna.tsinghua.edu.cn/simple || \
+    pip3 install "pandas>=2.0.0,<2.1.0" -i https://mirrors.aliyun.com/pypi/simple || \
+    pip3 install "pandas>=2.0.0,<2.1.0"
     
     # 重新安装所有依赖
     pip3 install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple || \
@@ -448,14 +477,34 @@ MISSING_MODULES=()
 for module in "${REQUIRED_MODULES[@]}"; do
     if ! python3 -c "import $module" 2>/dev/null; then
         MISSING_MODULES+=("$module")
+        log_warning "缺少模块: $module"
+    else
+        log_success "模块已安装: $module"
     fi
 done
 
 if [ ${#MISSING_MODULES[@]} -gt 0 ]; then
     log_error "缺少以下模块: ${MISSING_MODULES[*]}"
     log_info "重新安装所有依赖..."
-    pip3 install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple || \
-    pip3 install -r requirements.txt
+    python3 -m pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple || \
+    python3 -m pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple || \
+    python3 -m pip install -r requirements.txt
+    
+    # 再次验证
+    sleep 2
+    ALL_OK=true
+    for module in "${REQUIRED_MODULES[@]}"; do
+        if ! python3 -c "import $module" 2>/dev/null; then
+            log_error "模块仍然缺失: $module"
+            ALL_OK=false
+        fi
+    done
+    
+    if [ "$ALL_OK" = false ]; then
+        log_error "依赖安装失败，请手动检查"
+        log_info "运行修复脚本: ./fix-backend-deps-manual.sh"
+        exit 1
+    fi
 else
     log_success "所有关键依赖已安装"
 fi
