@@ -40,7 +40,8 @@ def register():
         connection.commit()
         
         user_id = cursor.lastrowid
-        access_token = create_access_token(identity=user_id)
+        # JWT identity 必须是字符串
+        access_token = create_access_token(identity=str(user_id))
         
         return jsonify({
             'message': 'User registered successfully',
@@ -90,7 +91,8 @@ def login():
         if not bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8')):
             return jsonify({'error': 'Invalid credentials'}), 401
         
-        access_token = create_access_token(identity=user_id)
+        # JWT identity 必须是字符串
+        access_token = create_access_token(identity=str(user_id))
         
         return jsonify({
             'message': 'Login successful',
@@ -107,6 +109,12 @@ def login():
 def get_profile():
     """获取用户信息"""
     user_id = get_jwt_identity()
+    
+    # JWT identity 返回的是字符串，需要转换为整数用于数据库查询
+    try:
+        user_id = int(user_id) if isinstance(user_id, str) else user_id
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Invalid user ID format'}), 400
     
     connection = db.get_connection()
     try:
