@@ -15,8 +15,22 @@ bp = Blueprint('recommendations', __name__)
 @jwt_required()
 def get_recommendations():
     """获取个性化推荐"""
-    user_id = get_jwt_identity()
-    n = request.args.get('n', Config.RECOMMENDATION_COUNT, type=int)
+    try:
+        user_id = get_jwt_identity()
+        # 确保 user_id 是整数
+        if isinstance(user_id, str):
+            user_id = int(user_id)
+        elif not isinstance(user_id, int):
+            return jsonify({'error': 'Invalid user ID format'}), 400
+        
+        n = request.args.get('n', Config.RECOMMENDATION_COUNT, type=int)
+        if n is None:
+            n = Config.RECOMMENDATION_COUNT
+    except Exception as e:
+        import traceback
+        error_msg = str(e) if str(e) else traceback.format_exc()
+        print(f"获取用户ID失败: {error_msg}")
+        return jsonify({'error': 'Invalid authentication'}), 401
     
     # 尝试从Redis缓存获取
     try:
@@ -42,6 +56,12 @@ def get_recommendations():
     # 获取菜品详情
     connection = db.get_connection()
     try:
+        if not dish_ids:
+            return jsonify({'dishes': []}), 200
+        
+        # 确保 dish_ids 都是整数
+        dish_ids = [int(did) for did in dish_ids if did is not None]
+        
         if not dish_ids:
             return jsonify({'dishes': []}), 200
         

@@ -23,22 +23,30 @@ def add_sample_ratings():
         # 获取所有用户
         cursor.execute("SELECT id FROM users")
         users = cursor.fetchall()
+        if not users:
+            print("❌ 没有用户，请先注册用户")
+            return
+        
         if isinstance(users[0], dict):
-            user_ids = [u.get('id') for u in users]
+            user_ids = [u.get('id') for u in users if u.get('id')]
         else:
-            user_ids = [u[0] for u in users]
+            user_ids = [u[0] for u in users if u[0]]
         
         if not user_ids:
-            print("❌ 没有用户，请先注册用户")
+            print("❌ 没有有效的用户ID")
             return
         
         # 获取所有菜品
         cursor.execute("SELECT id FROM dishes")
         dishes = cursor.fetchall()
+        if not dishes:
+            print("❌ 没有菜品数据")
+            return
+        
         if isinstance(dishes[0], dict):
-            dish_ids = [d.get('id') for d in dishes]
+            dish_ids = [d.get('id') for d in dishes if d.get('id')]
         else:
-            dish_ids = [d[0] for d in dishes]
+            dish_ids = [d[0] for d in dishes if d[0]]
         
         if not dish_ids:
             print("❌ 没有菜品数据")
@@ -97,9 +105,12 @@ def add_sample_ratings():
         print(f"✅ 成功添加 {total_ratings} 条评分数据")
         
         # 显示统计信息
-        cursor.execute("SELECT COUNT(*) FROM ratings")
+        cursor.execute("SELECT COUNT(*) as total FROM ratings")
         count = cursor.fetchone()
-        total_count = count[0] if isinstance(count, dict) else count[0]
+        if isinstance(count, dict):
+            total_count = count.get('total', 0)
+        else:
+            total_count = count[0] if count else 0
         print(f"📊 数据库中总共有 {total_count} 条评分记录")
         
         # 显示每个菜品的平均评分

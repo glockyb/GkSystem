@@ -98,6 +98,13 @@ class CollaborativeFiltering:
     
     def recommend(self, user_id, n=10):
         """为用户推荐菜品"""
+        # 确保 user_id 是整数
+        try:
+            user_id = int(user_id)
+        except (ValueError, TypeError):
+            print(f"无效的用户ID: {user_id}")
+            return []
+        
         if self.model is None:
             self.load_model()
         
@@ -112,9 +119,9 @@ class CollaborativeFiltering:
             rows = cursor.fetchall()
             # 处理 DictCursor（返回字典）或普通 cursor（返回元组）
             if rows and isinstance(rows[0], dict):
-                all_dishes = [row.get('id') for row in rows]
+                all_dishes = [row.get('id') for row in rows if row.get('id')]
             else:
-                all_dishes = [row[0] for row in rows]
+                all_dishes = [row[0] for row in rows if row[0]]
             
             if not all_dishes:
                 return []
@@ -293,6 +300,13 @@ class HybridRecommender:
     
     def recommend(self, user_id, n=10):
         """混合推荐"""
+        # 确保 user_id 是整数
+        try:
+            user_id = int(user_id)
+        except (ValueError, TypeError):
+            print(f"无效的用户ID: {user_id}")
+            return self.get_popular_dishes(n)
+        
         # 协同过滤推荐
         cf_recommendations = self.cf_recommender.recommend(user_id, n)
         
@@ -307,10 +321,13 @@ class HybridRecommender:
             """, (user_id, user_id))
             rows = cursor.fetchall()
             # 处理 DictCursor（返回字典）或普通 cursor（返回元组）
-            if rows and isinstance(rows[0], dict):
-                user_dishes = [row.get('dish_id') for row in rows]
+            if rows:
+                if isinstance(rows[0], dict):
+                    user_dishes = [row.get('dish_id') for row in rows if row.get('dish_id')]
+                else:
+                    user_dishes = [row[0] for row in rows if row[0]]
             else:
-                user_dishes = [row[0] for row in rows]
+                user_dishes = []
             
             # 内容推荐
             cb_recommendations = self.cb_recommender.recommend(user_dishes, n) if user_dishes else []
