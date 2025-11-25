@@ -54,6 +54,10 @@ class DataPreprocessor:
             """
             dishes_df = pd.read_sql(dishes_query, connection)
             
+            # 确保价格列是数值类型
+            if not dishes_df.empty and 'price' in dishes_df.columns:
+                dishes_df['price'] = pd.to_numeric(dishes_df['price'], errors='coerce').fillna(10.0)
+            
             return consumption_df, ratings_df, dishes_df
         except Exception as e:
             print(f"加载数据失败: {e}")
@@ -104,8 +108,12 @@ class DataPreprocessor:
             category_map = {'荤菜': 1, '素菜': 0, '汤类': 2, '主食': 3}
             category_encoded = category_map.get(dish.get('category', ''), 0)
             
-            # 特征2: 价格区间
-            price = dish.get('price', 10.0)
+            # 特征2: 价格区间（确保价格是数值类型）
+            try:
+                price = float(dish.get('price', 10.0)) if dish.get('price') is not None else 10.0
+            except (ValueError, TypeError):
+                price = 10.0
+            
             if price < 8:
                 price_range = 0
             elif price < 12:
