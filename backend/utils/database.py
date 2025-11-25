@@ -16,6 +16,19 @@ class Database:
     
     def get_connection(self):
         """获取MySQL连接"""
+        # 检查现有连接是否有效
+        if self.connection is not None:
+            try:
+                # 尝试执行一个简单查询来检查连接是否有效
+                self.connection.ping(reconnect=False)
+            except:
+                # 连接已失效，重新创建
+                try:
+                    self.connection.close()
+                except:
+                    pass
+                self.connection = None
+        
         if self.connection is None:
             try:
                 self.connection = pymysql.connect(
@@ -25,10 +38,13 @@ class Database:
                     password=Config.MYSQL_PASSWORD,
                     database=Config.MYSQL_DATABASE,
                     charset='utf8mb4',
-                    cursorclass=pymysql.cursors.DictCursor
+                    cursorclass=pymysql.cursors.DictCursor,
+                    autocommit=False
                 )
             except Exception as e:
                 print(f"数据库连接失败: {e}")
+                import traceback
+                traceback.print_exc()
                 raise
         return self.connection
     

@@ -75,14 +75,20 @@ api.interceptors.response.use(
     const status = response?.status
     const errorData = response?.data
     
-    // 日志记录错误
-    console.error('[API Error]', {
-      url: error.config?.url,
-      method: error.config?.method,
-      status: status,
-      error: errorData,
-      headers: error.config?.headers
-    })
+    // 日志记录错误（避免在错误处理中再次抛出错误）
+    try {
+      console.error('[API Error]', {
+        url: error.config?.url,
+        method: error.config?.method,
+        status: status,
+        error: errorData,
+        headers: error.config?.headers
+      })
+    } catch (logError) {
+      // 如果日志记录失败，至少输出基本信息
+      console.error('[API Error] Failed to log error details:', logError)
+      console.error('[API Error] Status:', status, 'URL:', error.config?.url)
+    }
     
     // 处理 401 未授权（token 过期或无效）
     if (status === 401) {

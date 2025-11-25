@@ -270,9 +270,20 @@ const loadUserRatings = async () => {
 const loadCategories = async () => {
   try {
     const response = await api.dishes.getCategories()
-    categories.value = response.categories || []
+    if (response && response.categories) {
+      categories.value = response.categories
+    } else {
+      categories.value = []
+      console.warn('加载分类失败: 响应格式不正确', response)
+    }
   } catch (error) {
     console.error('加载分类失败', error)
+    // 设置空数组，避免后续错误
+    categories.value = []
+    // 只在开发环境显示错误消息
+    if (import.meta.env.DEV) {
+      ElMessage.warning('加载分类失败，请刷新页面重试')
+    }
   }
 }
 

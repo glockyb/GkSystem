@@ -27,8 +27,13 @@ def get_dishes():
         
         print(f"[Dishes API] Request ID: {request_id}, Page: {page}, Per Page: {per_page}, Category: {category}")
         
-        connection = db.get_connection()
+        connection = None
+        cursor = None
         try:
+            connection = db.get_connection()
+            if not connection:
+                raise Exception("无法获取数据库连接")
+            
             cursor = connection.cursor()
             
             # 构建查询
@@ -58,7 +63,7 @@ def get_dishes():
                         'id': dish.get('id'),
                         'name': dish.get('name'),
                         'category': dish.get('category'),
-                        'price': float(dish.get('price', 0)),
+                        'price': float(dish.get('price', 0)) if dish.get('price') is not None else 0.0,
                         'description': dish.get('description'),
                         'image_url': dish.get('image_url'),
                         'nutrition_info': dish.get('nutrition_info')
@@ -68,7 +73,7 @@ def get_dishes():
                         'id': dish[0],
                         'name': dish[1],
                         'category': dish[2],
-                        'price': float(dish[3]),
+                        'price': float(dish[3]) if dish[3] is not None else 0.0,
                         'description': dish[4],
                         'image_url': dish[5],
                         'nutrition_info': dish[6]
@@ -93,7 +98,9 @@ def get_dishes():
                 'request_id': request_id
             }), 500
         finally:
-            cursor.close()
+            if cursor:
+                cursor.close()
+            # 注意：不要关闭 connection，因为 db.get_connection() 可能使用连接池
     except Exception as e:
         import traceback
         error_msg = str(e) if str(e) else traceback.format_exc()
@@ -158,8 +165,13 @@ def get_categories():
     """获取菜品分类"""
     request_id = request.headers.get('X-Request-ID', 'N/A')
     
-    connection = db.get_connection()
+    connection = None
+    cursor = None
     try:
+        connection = db.get_connection()
+        if not connection:
+            raise Exception("无法获取数据库连接")
+        
         cursor = connection.cursor()
         cursor.execute("SELECT DISTINCT category FROM dishes WHERE category IS NOT NULL")
         rows = cursor.fetchall()
@@ -190,4 +202,6 @@ def get_categories():
             'request_id': request_id
         }), 500
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
+        # 注意：不要关闭 connection，因为 db.get_connection() 可能使用连接池
