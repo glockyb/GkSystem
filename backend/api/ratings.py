@@ -64,10 +64,17 @@ def get_rating(dish_id):
         rating = cursor.fetchone()
         
         if rating:
-            return jsonify({
-                'rating': rating[0],
-                'comment': rating[1]
-            }), 200
+            # 处理 DictCursor（返回字典）或普通 cursor（返回元组）
+            if isinstance(rating, dict):
+                return jsonify({
+                    'rating': rating.get('rating'),
+                    'comment': rating.get('comment')
+                }), 200
+            else:
+                return jsonify({
+                    'rating': rating[0],
+                    'comment': rating[1]
+                }), 200
         else:
             return jsonify({'rating': None}), 200
     except Exception as e:
@@ -98,15 +105,27 @@ def get_history():
         records = cursor.fetchall()
         result = []
         for record in records:
-            result.append({
-                'id': record[0],
-                'dish_id': record[1],
-                'dish_name': record[2],
-                'category': record[3],
-                'price': float(record[4]),
-                'rating': record[5],
-                'consumption_time': record[6].isoformat() if record[6] else None
-            })
+            # 处理 DictCursor（返回字典）或普通 cursor（返回元组）
+            if isinstance(record, dict):
+                result.append({
+                    'id': record.get('id'),
+                    'dish_id': record.get('dish_id'),
+                    'dish_name': record.get('name'),
+                    'category': record.get('category'),
+                    'price': float(record.get('price', 0)),
+                    'rating': record.get('rating'),
+                    'consumption_time': record.get('consumption_time').isoformat() if record.get('consumption_time') else None
+                })
+            else:
+                result.append({
+                    'id': record[0],
+                    'dish_id': record[1],
+                    'dish_name': record[2],
+                    'category': record[3],
+                    'price': float(record[4]),
+                    'rating': record[5],
+                    'consumption_time': record[6].isoformat() if record[6] else None
+                })
         
         return jsonify({'history': result}), 200
     except Exception as e:

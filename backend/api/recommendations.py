@@ -49,20 +49,36 @@ def get_recommendations():
         dishes = cursor.fetchall()
         
         # 保持推荐顺序
-        dish_dict = {dish[0]: dish for dish in dishes}
+        # 处理 DictCursor（返回字典）或普通 cursor（返回元组）
+        if dishes and isinstance(dishes[0], dict):
+            dish_dict = {dish.get('id'): dish for dish in dishes}
+        else:
+            dish_dict = {dish[0]: dish for dish in dishes}
+        
         result = []
         for dish_id in dish_ids:
             if dish_id in dish_dict:
                 dish = dish_dict[dish_id]
-                result.append({
-                    'id': dish[0],
-                    'name': dish[1],
-                    'category': dish[2],
-                    'price': float(dish[3]),
-                    'description': dish[4],
-                    'image_url': dish[5],
-                    'nutrition_info': dish[6]
-                })
+                if isinstance(dish, dict):
+                    result.append({
+                        'id': dish.get('id'),
+                        'name': dish.get('name'),
+                        'category': dish.get('category'),
+                        'price': float(dish.get('price', 0)),
+                        'description': dish.get('description'),
+                        'image_url': dish.get('image_url'),
+                        'nutrition_info': dish.get('nutrition_info')
+                    })
+                else:
+                    result.append({
+                        'id': dish[0],
+                        'name': dish[1],
+                        'category': dish[2],
+                        'price': float(dish[3]),
+                        'description': dish[4],
+                        'image_url': dish[5],
+                        'nutrition_info': dish[6]
+                    })
         
         return jsonify({'dishes': result}), 200
     except Exception as e:
