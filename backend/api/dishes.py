@@ -30,14 +30,17 @@ def get_dishes():
         connection = None
         cursor = None
         try:
+            print(f"[Dishes API] Request ID: {request_id}, 获取数据库连接...")
             connection = db.get_connection()
             if not connection:
                 raise Exception("无法获取数据库连接")
+            print(f"[Dishes API] Request ID: {request_id}, 数据库连接成功")
             
             cursor = connection.cursor()
+            print(f"[Dishes API] Request ID: {request_id}, 创建游标成功")
             
             # 构建查询
-            query = "SELECT * FROM dishes WHERE 1=1"
+            query = "SELECT id, name, category, price, description, image_url, nutrition_info FROM dishes WHERE 1=1"
             params = []
             
             if category:
@@ -51,33 +54,43 @@ def get_dishes():
             query += " ORDER BY id LIMIT %s OFFSET %s"
             params.extend([per_page, (page - 1) * per_page])
             
+            print(f"[Dishes API] Request ID: {request_id}, 执行查询: {query[:100]}...")
             cursor.execute(query, params)
             dishes = cursor.fetchall()
+            print(f"[Dishes API] Request ID: {request_id}, 查询返回 {len(dishes) if dishes else 0} 条记录")
             
             # 转换为字典列表
             result = []
-            for dish in dishes:
-                # 处理 DictCursor（返回字典）或普通 cursor（返回元组）
-                if isinstance(dish, dict):
-                    result.append({
-                        'id': dish.get('id'),
-                        'name': dish.get('name'),
-                        'category': dish.get('category'),
-                        'price': float(dish.get('price', 0)) if dish.get('price') is not None else 0.0,
-                        'description': dish.get('description'),
-                        'image_url': dish.get('image_url'),
-                        'nutrition_info': dish.get('nutrition_info')
-                    })
-                else:
-                    result.append({
-                        'id': dish[0],
-                        'name': dish[1],
-                        'category': dish[2],
-                        'price': float(dish[3]) if dish[3] is not None else 0.0,
-                        'description': dish[4],
-                        'image_url': dish[5],
-                        'nutrition_info': dish[6]
-                    })
+            for idx, dish in enumerate(dishes):
+                try:
+                    # 处理 DictCursor（返回字典）或普通 cursor（返回元组）
+                    if isinstance(dish, dict):
+                        dish_data = {
+                            'id': dish.get('id'),
+                            'name': dish.get('name') or '',
+                            'category': dish.get('category') or '',
+                            'price': float(dish.get('price', 0)) if dish.get('price') is not None else 0.0,
+                            'description': dish.get('description') or '',
+                            'image_url': dish.get('image_url') or '',
+                            'nutrition_info': dish.get('nutrition_info')
+                        }
+                    else:
+                        dish_data = {
+                            'id': dish[0] if len(dish) > 0 else None,
+                            'name': dish[1] if len(dish) > 1 else '',
+                            'category': dish[2] if len(dish) > 2 else '',
+                            'price': float(dish[3]) if len(dish) > 3 and dish[3] is not None else 0.0,
+                            'description': dish[4] if len(dish) > 4 else '',
+                            'image_url': dish[5] if len(dish) > 5 else '',
+                            'nutrition_info': dish[6] if len(dish) > 6 else None
+                        }
+                    result.append(dish_data)
+                except Exception as e:
+                    print(f"[Dishes API] Request ID: {request_id}, 处理第 {idx} 条记录时出错: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    # 跳过这条记录，继续处理下一条
+                    continue
             
             print(f"[Dishes API] Request ID: {request_id}, Found {len(result)} dishes")
             return jsonify({
