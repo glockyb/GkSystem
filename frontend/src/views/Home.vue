@@ -275,13 +275,27 @@ const loadDishes = async () => {
     const response = await api.dishes.getList(params)
     let dishesList = response.dishes || []
     
-    // 去重处理（按 id 去重，避免重复显示）
+    // 去重处理（按名称去重，避免重复显示）
+    const seenNames = new Set()
     const seenIds = new Set()
     dishesList = dishesList.filter(dish => {
-      if (seenIds.has(dish.id)) {
+      const dishName = (dish.name || '').trim()
+      const dishId = dish.id
+      
+      // 如果名称为空，按 ID 去重
+      if (!dishName) {
+        if (seenIds.has(dishId)) {
+          return false
+        }
+        seenIds.add(dishId)
+        return true
+      }
+      
+      // 按名称去重
+      if (seenNames.has(dishName)) {
         return false
       }
-      seenIds.add(dish.id)
+      seenNames.add(dishName)
       return true
     })
     
@@ -417,13 +431,14 @@ const viewDish = (dishId) => {
 // 处理图片URL，确保路径正确
 const getImageUrl = (imageUrl) => {
   if (!imageUrl) {
-    return null
+    // 返回占位符
+    return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImdyYWQiIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjEwMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0eWxlPSJzdG9wLWNvbG9yOiM2NjdlZWE7c3RvcC1vcGFjaXR5OjEiIC8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdHlsZT0ic3RvcC1jb2xvcjojNzY0YmEyO3N0b3Atb3BhY2l0eToxIiAvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiBmaWxsPSJ1cmwoI2dyYWQpIi8+PGNpcmNsZSBjeD0iMjAwIiBjeT0iMTIwIiByPSI0MCIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjMpIi8+PHBhdGggZD0iTSAxODAgMTIwIEwgMjAwIDEwMCBMIDIyMCAxMjAgTCAyMDAgMTQwIFoiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC41KSIvPjx0ZXh0IHg9IjIwMCIgeT0iMjAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC44KSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+56eR5oqA5Zu+54mHPC90ZXh0Pjwvc3ZnPg=='
   }
   // 如果已经是完整URL，直接返回
   if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
     return imageUrl
   }
-  // 如果以 / 开头，直接使用（相对路径）
+  // 如果以 / 开头，直接使用（相对路径，通过 Nginx 代理）
   if (imageUrl.startsWith('/')) {
     return imageUrl
   }

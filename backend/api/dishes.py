@@ -39,20 +39,56 @@ def get_dishes():
             cursor = connection.cursor()
             print(f"[Dishes API] Request ID: {request_id}, 创建游标成功")
             
-            # 构建查询（使用 DISTINCT 去重）
-            query = "SELECT DISTINCT id, name, category, price, description, image_url, nutrition_info FROM dishes WHERE 1=1"
+            # 构建查询（使用 GROUP BY 去重，确保每个菜品名称只返回一条记录）
+            # 构建 WHERE 条件
+            where_conditions = []
             params = []
+            count_params = []
             
             if category:
-                query += " AND category = %s"
+                where_conditions.append("category = %s")
                 params.append(category)
+                count_params.append(category)
             
             if search:
-                query += " AND name LIKE %s"
-                params.append(f'%{search}%')
+                where_conditions.append("name LIKE %s")
+                search_param = f'%{search}%'
+                params.append(search_param)
+                count_params.append(search_param)
             
-            query += " ORDER BY id LIMIT %s OFFSET %s"
-            params.extend([per_page, (page - 1) * per_page])
+            where_clause = " WHERE " + " AND ".join(where_conditions) if where_conditions else ""
+            
+            # 获取总数（去重后的唯一名称数量）
+            count_query = f"SELECT COUNT(DISTINCT name) FROM dishes{where_clause}"
+            
+            # 主查询：使用子查询确保每个名称只返回一条记录（取 ID 最小的）
+            # 构建外层 WHERE 条件（使用 d1 表别名）
+            outer_where_conditions = []
+            outer_params = []
+            
+            if category:
+                outer_where_conditions.append("d1.category = %s")
+                outer_params.append(category)
+            
+            if search:
+                outer_where_conditions.append("d1.name LIKE %s")
+                outer_params.append(f'%{search}%')
+            
+            outer_where_clause = " WHERE " + " AND ".join(outer_where_conditions) if outer_where_conditions else ""
+            
+            query = f"""
+                SELECT d1.id, d1.name, d1.category, d1.price, d1.description, d1.image_url, d1.nutrition_info
+                FROM dishes d1
+                INNER JOIN (
+                    SELECT name, MIN(id) as min_id
+                    FROM dishes
+                    {where_clause}
+                    GROUP BY name
+                ) d2 ON d1.name = d2.name AND d1.id = d2.min_id
+                {outer_where_clause}
+                ORDER BY d1.id LIMIT %s OFFSET %s
+            """
+            params = outer_params + [per_page, (page - 1) * per_page]
             
             print(f"[Dishes API] Request ID: {request_id}, 执行查询: {query[:100]}...")
             cursor.execute(query, params)
@@ -92,12 +128,35 @@ def get_dishes():
                     # 跳过这条记录，继续处理下一条
                     continue
             
-            print(f"[Dishes API] Request ID: {request_id}, Found {len(result)} dishes")
+            # 获取总数（去重后的）
+            cursor.execute(count_query, count_params)
+            total_count = cursor.fetchone()
+            if isinstance(total_count, dict):
+                total = total_count.get('COUNT(DISTINCT name)') or 0
+            else:
+                total = total_count[0] if total_count else 0
+            
+            print(f"[Dishes API] Request ID: {request_id}, Found {len(result)} dishes (unique: {total})")
+            
+            # 再次去重（双重保障）- 按名称去重，确保每个名称只出现一次
+            seen_names = set()
+            unique_result = []
+            for dish in result:
+                dish_name = dish.get('name', '').strip()
+                if dish_name and dish_name not in seen_names:
+                    seen_names.add(dish_name)
+                    unique_result.append(dish)
+                elif not dish_name:
+                    # 如果名称为空，按 ID 去重
+                    dish_id = dish.get('id')
+                    if dish_id and dish_id not in [d.get('id') for d in unique_result]:
+                        unique_result.append(dish)
+            
             return jsonify({
-                'dishes': result,
+                'dishes': unique_result,
                 'page': page,
                 'per_page': per_page,
-                'total': len(result),
+                'total': total,
                 'request_id': request_id
             }), 200
         except Exception as e:
