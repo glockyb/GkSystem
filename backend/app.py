@@ -2,7 +2,7 @@
 Flask应用主文件
 提供RESTful API接口
 """
-from flask import Flask
+from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 import sys
@@ -22,6 +22,19 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # JWT配置
 jwt = JWTManager(app)
+
+# JWT 错误处理
+@jwt.expired_token_loader
+def expired_token_callback(jwt_header, jwt_payload):
+    return jsonify({'error': 'Token has expired'}), 401
+
+@jwt.invalid_token_loader
+def invalid_token_callback(error):
+    return jsonify({'error': f'Invalid token: {str(error)}'}), 422
+
+@jwt.unauthorized_loader
+def missing_token_callback(error):
+    return jsonify({'error': 'Authorization header is missing'}), 401
 
 # 注册蓝图
 app.register_blueprint(auth.bp, url_prefix=Config.API_PREFIX)

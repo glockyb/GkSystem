@@ -19,8 +19,19 @@ def get_recommendations():
         user_id = get_jwt_identity()
         # 确保 user_id 是整数
         if isinstance(user_id, str):
-            user_id = int(user_id)
+            try:
+                user_id = int(user_id)
+            except ValueError:
+                import traceback
+                error_msg = f"无法将 user_id 转换为整数: {user_id}, 类型: {type(user_id)}"
+                print(f"获取用户ID失败: {error_msg}")
+                traceback.print_exc()
+                return jsonify({'error': 'Invalid user ID format'}), 400
         elif not isinstance(user_id, int):
+            import traceback
+            error_msg = f"user_id 类型不正确: {user_id}, 类型: {type(user_id)}"
+            print(f"获取用户ID失败: {error_msg}")
+            traceback.print_exc()
             return jsonify({'error': 'Invalid user ID format'}), 400
         
         n = request.args.get('n', Config.RECOMMENDATION_COUNT, type=int)
@@ -30,7 +41,8 @@ def get_recommendations():
         import traceback
         error_msg = str(e) if str(e) else traceback.format_exc()
         print(f"获取用户ID失败: {error_msg}")
-        return jsonify({'error': 'Invalid authentication'}), 401
+        traceback.print_exc()
+        return jsonify({'error': f'Invalid authentication: {error_msg}'}), 401
     
     # 尝试从Redis缓存获取
     try:

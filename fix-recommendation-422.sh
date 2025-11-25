@@ -1,95 +1,92 @@
 #!/bin/bash
+
 # 修复推荐功能 422 错误
 
 set -e
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+echo "=========================================="
+echo "🔧 修复推荐功能 422 错误"
+echo "=========================================="
 
-log_info() { echo -e "${BLUE}ℹ️  $1${NC}"; }
-log_success() { echo -e "${GREEN}✅ $1${NC}"; }
-log_warning() { echo -e "${YELLOW}⚠️  $1${NC}"; }
-log_error() { echo -e "${RED}❌ $1${NC}"; }
+cd ~/gksys/GkSystem || exit 1
 
-if [ "$EUID" -eq 0 ]; then
-    SUDO=""
+# 1. 检查后端日志
+echo ""
+echo "ℹ️ 步骤1: 检查后端日志（最近错误）..."
+sudo journalctl -u canteen-backend -n 50 --no-pager | grep -i "error\|422\|jwt\|token" || echo "未发现相关错误"
+
+# 2. 检查 JWT 配置
+echo ""
+echo "ℹ️ 步骤2: 检查 JWT 配置..."
+if grep -q "JWT_SECRET_KEY" backend/config.py; then
+    echo "✅ JWT_SECRET_KEY 已配置"
 else
-    SUDO="sudo"
+    echo "⚠️ JWT_SECRET_KEY 未找到"
 fi
 
-echo "=========================================="
-log_info "修复推荐功能 422 错误"
-echo "=========================================="
+# 3. 测试推荐 API（需要 token）
 echo ""
+echo "ℹ️ 步骤3: 测试推荐 API..."
+echo "⚠️ 需要有效的 JWT token 才能测试，请在前端浏览器中查看 Network 标签获取 token"
 
-# 步骤1：重启后端服务（应用代码修复）
-log_info "步骤1: 重启后端服务..."
-$SUDO systemctl restart canteen-backend
-sleep 5
-
-if $SUDO systemctl is-active canteen-backend >/dev/null 2>&1; then
-    log_success "后端服务运行中"
+# 4. 检查推荐模型
+echo ""
+echo "ℹ️ 步骤4: 检查推荐模型..."
+if [ -f "backend/models/collaborative_model.pkl" ]; then
+    echo "✅ 协同过滤模型存在"
 else
-    log_error "后端服务启动失败"
-    $SUDO journalctl -u canteen-backend -n 30 --no-pager
-    exit 1
+    echo "⚠️ 协同过滤模型不存在，需要训练"
 fi
-echo ""
 
-# 步骤2：检查后端日志
-log_info "步骤2: 检查后端日志（最近错误）..."
-RECENT_ERRORS=$($SUDO journalctl -u canteen-backend -n 50 --no-pager | grep -i "error\|exception\|traceback\|422\|recommendation" | tail -15)
-if [ -n "$RECENT_ERRORS" ]; then
-    log_warning "发现错误:"
-    echo "$RECENT_ERRORS"
+if [ -f "backend/models/content_model.pkl" ]; then
+    echo "✅ 内容推荐模型存在"
 else
-    log_success "未发现错误"
+    echo "⚠️ 内容推荐模型不存在，需要训练"
 fi
+
+# 5. 检查推荐代码
 echo ""
-
-# 步骤3：检查推荐模型
-log_info "步骤3: 检查推荐模型..."
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-MODEL_DIR="$SCRIPT_DIR/backend/models"
-
-if [ -f "$MODEL_DIR/cf_model.pkl" ] || [ -f "$MODEL_DIR/cb_model.pkl" ]; then
-    log_success "推荐模型文件存在"
+echo "ℹ️ 步骤5: 检查推荐代码..."
+if grep -q "@jwt_required()" backend/api/recommendations.py; then
+    echo "✅ JWT 认证已配置"
 else
-    log_warning "推荐模型文件不存在"
-    log_info "需要训练模型: cd backend && python train_model.py"
+    echo "❌ JWT 认证未配置"
 fi
+
+# 6. 重启后端服务
 echo ""
+echo "ℹ️ 步骤6: 重启后端服务..."
+sudo systemctl restart canteen-backend
+sleep 2
 
-# 步骤4：检查评分数据
-log_info "步骤4: 检查评分数据..."
-DB_NAME="canteen_recommendation"
-RATING_COUNT=$(mysql -u root -ppassword -e "USE $DB_NAME; SELECT COUNT(*) FROM ratings;" 2>/dev/null | tail -1)
-log_info "评分记录数: $RATING_COUNT"
-
-if [ "$RATING_COUNT" -lt 10 ]; then
-    log_warning "评分数据较少，推荐功能可能无法正常工作"
-    log_info "建议运行: python3 add-sample-ratings.py"
+# 7. 检查服务状态
+echo ""
+echo "ℹ️ 步骤7: 检查服务状态..."
+if sudo systemctl is-active --quiet canteen-backend; then
+    echo "✅ 后端服务运行中"
+else
+    echo "❌ 后端服务未运行"
+    sudo systemctl status canteen-backend --no-pager -l
 fi
-echo ""
 
-echo "=========================================="
-log_success "修复完成"
-echo "=========================================="
+# 8. 查看最新日志
 echo ""
-log_info "现在请："
-echo "  1. 清除浏览器缓存（Ctrl+Shift+Delete）"
-echo "  2. 强制刷新（Ctrl+F5）"
-echo "  3. 重新登录"
-echo "  4. 测试推荐功能"
-echo ""
-log_info "如果仍然返回 422，请："
-echo "  1. 打开浏览器开发者工具 (F12)"
-echo "  2. 查看 Network 标签"
-echo "  3. 点击推荐，查看请求详情"
-echo "  4. 查看请求头中的 Authorization"
-echo "  5. 查看响应内容"
-echo "=========================================="
+echo "ℹ️ 步骤8: 查看最新日志（最后10行）..."
+sudo journalctl -u canteen-backend -n 10 --no-pager
 
+echo ""
+echo "=========================================="
+echo "✅ 修复完成"
+echo "=========================================="
+echo ""
+echo "📋 下一步操作："
+echo "1. 在前端浏览器中打开开发者工具（F12）"
+echo "2. 切换到 Network 标签"
+echo "3. 点击推荐按钮"
+echo "4. 查看请求详情，检查："
+echo "   - Authorization header 是否包含 Bearer token"
+echo "   - 响应状态码和错误信息"
+echo "5. 如果 token 无效，请重新登录"
+echo ""
+echo "📖 查看实时日志: sudo journalctl -u canteen-backend -f"
+echo ""
