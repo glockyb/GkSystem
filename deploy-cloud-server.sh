@@ -453,6 +453,16 @@ Environment="PATH=$BACKEND_PATH/venv/bin"
 Environment="FLASK_HOST=127.0.0.1"
 Environment="FLASK_PORT=5000"
 Environment="FLASK_DEBUG=False"
+# MySQL 配置（修复 MySQL 8.0+ 认证问题）
+Environment="MYSQL_HOST=localhost"
+Environment="MYSQL_PORT=3306"
+Environment="MYSQL_USER=root"
+Environment="MYSQL_PASSWORD=password"
+Environment="MYSQL_DATABASE=canteen_recommendation"
+# Redis 配置
+Environment="REDIS_HOST=localhost"
+Environment="REDIS_PORT=6379"
+Environment="REDIS_DB=0"
 ExecStart=$BACKEND_PATH/venv/bin/python3 app.py
 Restart=always
 RestartSec=10
