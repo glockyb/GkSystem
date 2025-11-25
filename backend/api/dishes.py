@@ -168,24 +168,43 @@ def get_categories():
     connection = None
     cursor = None
     try:
+        print(f"[Dishes API] Request ID: {request_id}, 开始获取分类...")
+        
         connection = db.get_connection()
         if not connection:
             raise Exception("无法获取数据库连接")
         
+        print(f"[Dishes API] Request ID: {request_id}, 数据库连接成功")
+        
         cursor = connection.cursor()
+        print(f"[Dishes API] Request ID: {request_id}, 执行查询...")
+        
         cursor.execute("SELECT DISTINCT category FROM dishes WHERE category IS NOT NULL")
         rows = cursor.fetchall()
         
+        print(f"[Dishes API] Request ID: {request_id}, 查询返回 {len(rows) if rows else 0} 行")
+        
+        # 处理空结果
+        if not rows:
+            print(f"[Dishes API] Request ID: {request_id}, 未找到分类，返回空列表")
+            return jsonify({
+                'categories': [],
+                'count': 0,
+                'request_id': request_id
+            }), 200
+        
         # 处理 DictCursor（返回字典）或普通 cursor（返回元组）
-        if rows and isinstance(rows[0], dict):
-            categories = [row['category'] for row in rows if row.get('category')]
+        categories = []
+        if isinstance(rows[0], dict):
+            categories = [row.get('category') for row in rows if row.get('category') is not None]
         else:
-            categories = [row[0] for row in rows if row[0]]
+            categories = [row[0] for row in rows if row[0] is not None]
         
         # 去重并排序
         categories = sorted(list(set(categories)))
         
-        print(f"[Dishes API] Request ID: {request_id}, Found {len(categories)} categories")
+        print(f"[Dishes API] Request ID: {request_id}, 找到 {len(categories)} 个唯一分类: {categories[:5]}...")
+        
         return jsonify({
             'categories': categories,
             'count': len(categories),
@@ -203,5 +222,8 @@ def get_categories():
         }), 500
     finally:
         if cursor:
-            cursor.close()
+            try:
+                cursor.close()
+            except:
+                pass
         # 注意：不要关闭 connection，因为 db.get_connection() 可能使用连接池
