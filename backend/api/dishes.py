@@ -41,15 +41,27 @@ def get_dishes():
         # 转换为字典列表
         result = []
         for dish in dishes:
-            result.append({
-                'id': dish[0],
-                'name': dish[1],
-                'category': dish[2],
-                'price': float(dish[3]),
-                'description': dish[4],
-                'image_url': dish[5],
-                'nutrition_info': dish[6]
-            })
+            # 处理 DictCursor（返回字典）或普通 cursor（返回元组）
+            if isinstance(dish, dict):
+                result.append({
+                    'id': dish.get('id'),
+                    'name': dish.get('name'),
+                    'category': dish.get('category'),
+                    'price': float(dish.get('price', 0)),
+                    'description': dish.get('description'),
+                    'image_url': dish.get('image_url'),
+                    'nutrition_info': dish.get('nutrition_info')
+                })
+            else:
+                result.append({
+                    'id': dish[0],
+                    'name': dish[1],
+                    'category': dish[2],
+                    'price': float(dish[3]),
+                    'description': dish[4],
+                    'image_url': dish[5],
+                    'nutrition_info': dish[6]
+                })
         
         return jsonify({'dishes': result}), 200
     except Exception as e:
@@ -71,18 +83,35 @@ def get_dish(dish_id):
         
         # 获取平均评分
         cursor.execute("SELECT AVG(rating) FROM ratings WHERE dish_id = %s", (dish_id,))
-        avg_rating = cursor.fetchone()[0] or 0
+        avg_rating_row = cursor.fetchone()
+        if isinstance(avg_rating_row, dict):
+            avg_rating = avg_rating_row.get('AVG(rating)') or 0
+        else:
+            avg_rating = avg_rating_row[0] if avg_rating_row else 0
         
-        return jsonify({
-            'id': dish[0],
-            'name': dish[1],
-            'category': dish[2],
-            'price': float(dish[3]),
-            'description': dish[4],
-            'image_url': dish[5],
-            'nutrition_info': dish[6],
-            'avg_rating': float(avg_rating)
-        }), 200
+        # 处理 DictCursor（返回字典）或普通 cursor（返回元组）
+        if isinstance(dish, dict):
+            return jsonify({
+                'id': dish.get('id'),
+                'name': dish.get('name'),
+                'category': dish.get('category'),
+                'price': float(dish.get('price', 0)),
+                'description': dish.get('description'),
+                'image_url': dish.get('image_url'),
+                'nutrition_info': dish.get('nutrition_info'),
+                'avg_rating': float(avg_rating)
+            }), 200
+        else:
+            return jsonify({
+                'id': dish[0],
+                'name': dish[1],
+                'category': dish[2],
+                'price': float(dish[3]),
+                'description': dish[4],
+                'image_url': dish[5],
+                'nutrition_info': dish[6],
+                'avg_rating': float(avg_rating)
+            }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
@@ -95,9 +124,16 @@ def get_categories():
     try:
         cursor = connection.cursor()
         cursor.execute("SELECT DISTINCT category FROM dishes")
-        categories = [row[0] for row in cursor.fetchall()]
+        rows = cursor.fetchall()
+        # 处理 DictCursor（返回字典）或普通 cursor（返回元组）
+        if rows and isinstance(rows[0], dict):
+            categories = [row['category'] for row in rows if row.get('category')]
+        else:
+            categories = [row[0] for row in rows if row[0]]
         return jsonify({'categories': categories}), 200
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        import traceback
+        error_msg = str(e) if str(e) else traceback.format_exc()
+        return jsonify({'error': error_msg}), 500
     finally:
         cursor.close()
