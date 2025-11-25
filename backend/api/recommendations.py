@@ -15,8 +15,15 @@ bp = Blueprint('recommendations', __name__)
 @jwt_required()
 def get_recommendations():
     """获取个性化推荐"""
+    request_id = request.headers.get('X-Request-ID', 'N/A')
+    
     try:
+        # 获取并验证 user_id
         user_id = get_jwt_identity()
+        
+        # 记录请求信息
+        print(f"[Recommendations API] Request ID: {request_id}, User ID from token: {user_id} (type: {type(user_id).__name__})")
+        
         # 确保 user_id 是整数
         if isinstance(user_id, str):
             try:
@@ -24,25 +31,55 @@ def get_recommendations():
             except ValueError:
                 import traceback
                 error_msg = f"无法将 user_id 转换为整数: {user_id}, 类型: {type(user_id)}"
-                print(f"获取用户ID失败: {error_msg}")
+                print(f"[Recommendations API] 获取用户ID失败: {error_msg}")
                 traceback.print_exc()
-                return jsonify({'error': 'Invalid user ID format'}), 400
+                return jsonify({
+                    'error': 'Invalid user ID format',
+                    'error_code': 'INVALID_USER_ID',
+                    'request_id': request_id
+                }), 400
         elif not isinstance(user_id, int):
             import traceback
             error_msg = f"user_id 类型不正确: {user_id}, 类型: {type(user_id)}"
-            print(f"获取用户ID失败: {error_msg}")
+            print(f"[Recommendations API] 获取用户ID失败: {error_msg}")
             traceback.print_exc()
-            return jsonify({'error': 'Invalid user ID format'}), 400
+            return jsonify({
+                'error': 'Invalid user ID format',
+                'error_code': 'INVALID_USER_ID',
+                'request_id': request_id
+            }), 400
         
+        # 验证 user_id 范围
+        if user_id <= 0:
+            return jsonify({
+                'error': 'Invalid user ID: must be positive',
+                'error_code': 'INVALID_USER_ID',
+                'request_id': request_id
+            }), 400
+        
+        # 获取并验证参数 n
         n = request.args.get('n', Config.RECOMMENDATION_COUNT, type=int)
         if n is None:
             n = Config.RECOMMENDATION_COUNT
+        
+        # 验证 n 的范围
+        if n < 1:
+            n = 1
+        elif n > 100:  # 限制最大推荐数量
+            n = 100
+            
+        print(f"[Recommendations API] Request ID: {request_id}, User ID: {user_id}, Count: {n}")
+        
     except Exception as e:
         import traceback
         error_msg = str(e) if str(e) else traceback.format_exc()
-        print(f"获取用户ID失败: {error_msg}")
+        print(f"[Recommendations API] 获取用户ID失败: {error_msg}")
         traceback.print_exc()
-        return jsonify({'error': f'Invalid authentication: {error_msg}'}), 401
+        return jsonify({
+            'error': f'Invalid authentication: {error_msg}',
+            'error_code': 'AUTH_ERROR',
+            'request_id': request_id
+        }), 401
     
     # 尝试从Redis缓存获取
     try:
@@ -117,11 +154,20 @@ def get_recommendations():
                         'nutrition_info': dish[6]
                     })
         
-        return jsonify({'dishes': result}), 200
+        return jsonify({
+            'dishes': result,
+            'request_id': request_id,
+            'count': len(result)
+        }), 200
     except Exception as e:
         import traceback
         error_msg = str(e) if str(e) else traceback.format_exc()
-        print(f"推荐API错误: {error_msg}")
-        return jsonify({'error': error_msg}), 500
+        print(f"[Recommendations API] 获取推荐失败: {error_msg}")
+        traceback.print_exc()
+        return jsonify({
+            'error': error_msg,
+            'error_code': 'RECOMMENDATION_ERROR',
+            'request_id': request_id
+        }), 500
     finally:
         cursor.close()

@@ -13,49 +13,200 @@ bp = Blueprint('ratings', __name__)
 @jwt_required()
 def create_rating():
     """创建评分"""
-    user_id = get_jwt_identity()
-    data = request.get_json()
-    dish_id = data.get('dish_id')
-    rating = data.get('rating')
-    comment = data.get('comment')
+    request_id = request.headers.get('X-Request-ID', 'N/A')
     
-    if not dish_id or not rating:
-        return jsonify({'error': 'dish_id and rating are required'}), 400
-    
-    if rating < 1 or rating > 5:
-        return jsonify({'error': 'Rating must be between 1 and 5'}), 400
-    
-    connection = db.get_connection()
     try:
-        cursor = connection.cursor()
+        # 获取并验证 user_id
+        user_id = get_jwt_identity()
         
-        # 插入或更新评分
-        cursor.execute("""
-            INSERT INTO ratings (user_id, dish_id, rating, comment)
-            VALUES (%s, %s, %s, %s)
-            ON DUPLICATE KEY UPDATE
-            rating = VALUES(rating),
-            comment = VALUES(comment),
-            updated_at = NOW()
-        """, (user_id, dish_id, rating, comment))
+        # 确保 user_id 是整数
+        if isinstance(user_id, str):
+            try:
+                user_id = int(user_id)
+            except ValueError:
+                return jsonify({
+                    'error': 'Invalid user ID format',
+                    'error_code': 'INVALID_USER_ID',
+                    'request_id': request_id
+                }), 400
+        elif not isinstance(user_id, int):
+            return jsonify({
+                'error': 'Invalid user ID format',
+                'error_code': 'INVALID_USER_ID',
+                'request_id': request_id
+            }), 400
         
-        connection.commit()
+        # 验证 user_id 范围
+        if user_id <= 0:
+            return jsonify({
+                'error': 'Invalid user ID: must be positive',
+                'error_code': 'INVALID_USER_ID',
+                'request_id': request_id
+            }), 400
         
-        return jsonify({'message': 'Rating created successfully'}), 201
+        # 获取请求数据
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'error': 'Request body is required',
+                'error_code': 'MISSING_BODY',
+                'request_id': request_id
+            }), 400
+        
+        dish_id = data.get('dish_id')
+        rating = data.get('rating')
+        comment = data.get('comment', '')
+        
+        # 验证必需参数
+        if dish_id is None:
+            return jsonify({
+                'error': 'dish_id is required',
+                'error_code': 'MISSING_DISH_ID',
+                'request_id': request_id
+            }), 400
+        
+        if rating is None:
+            return jsonify({
+                'error': 'rating is required',
+                'error_code': 'MISSING_RATING',
+                'request_id': request_id
+            }), 400
+        
+        # 验证参数类型和范围
+        try:
+            dish_id = int(dish_id)
+            rating = float(rating)
+        except (ValueError, TypeError):
+            return jsonify({
+                'error': 'dish_id must be integer and rating must be number',
+                'error_code': 'INVALID_PARAM_TYPE',
+                'request_id': request_id
+            }), 400
+        
+        if dish_id <= 0:
+            return jsonify({
+                'error': 'dish_id must be positive',
+                'error_code': 'INVALID_DISH_ID',
+                'request_id': request_id
+            }), 400
+        
+        if rating < 1 or rating > 5:
+            return jsonify({
+                'error': 'Rating must be between 1 and 5',
+                'error_code': 'INVALID_RATING_RANGE',
+                'request_id': request_id
+            }), 400
+        
+        # 验证 comment 长度
+        if comment and len(comment) > 500:
+            return jsonify({
+                'error': 'Comment must be less than 500 characters',
+                'error_code': 'COMMENT_TOO_LONG',
+                'request_id': request_id
+            }), 400
+        
+        print(f"[Ratings API] Request ID: {request_id}, User ID: {user_id}, Dish ID: {dish_id}, Rating: {rating}")
+        
+        # 数据库操作
+        connection = db.get_connection()
+        try:
+            cursor = connection.cursor()
+            
+            # 插入或更新评分
+            cursor.execute("""
+                INSERT INTO ratings (user_id, dish_id, rating, comment)
+                VALUES (%s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                rating = VALUES(rating),
+                comment = VALUES(comment),
+                updated_at = NOW()
+            """, (user_id, dish_id, rating, comment))
+            
+            connection.commit()
+            
+            return jsonify({
+                'message': 'Rating created successfully',
+                'request_id': request_id
+            }), 201
+        except Exception as e:
+            connection.rollback()
+            import traceback
+            error_msg = str(e) if str(e) else traceback.format_exc()
+            print(f"[Ratings API] 创建评分失败: {error_msg}")
+            traceback.print_exc()
+            return jsonify({
+                'error': error_msg,
+                'error_code': 'DATABASE_ERROR',
+                'request_id': request_id
+            }), 500
+        finally:
+            cursor.close()
+            
     except Exception as e:
-        connection.rollback()
         import traceback
         error_msg = str(e) if str(e) else traceback.format_exc()
-        print(f"评分API错误: {error_msg}")
-        return jsonify({'error': error_msg}), 500
-    finally:
-        cursor.close()
+        print(f"[Ratings API] 参数验证失败: {error_msg}")
+        traceback.print_exc()
+        return jsonify({
+            'error': f'Parameter validation failed: {error_msg}',
+            'error_code': 'VALIDATION_ERROR',
+            'request_id': request_id
+        }), 400
 
 @bp.route('/ratings/<int:dish_id>', methods=['GET'])
 @jwt_required()
 def get_rating(dish_id):
     """获取用户对菜品的评分"""
-    user_id = get_jwt_identity()
+    request_id = request.headers.get('X-Request-ID', 'N/A')
+    
+    try:
+        # 获取并验证 user_id
+        user_id = get_jwt_identity()
+        
+        # 确保 user_id 是整数
+        if isinstance(user_id, str):
+            try:
+                user_id = int(user_id)
+            except ValueError:
+                return jsonify({
+                    'error': 'Invalid user ID format',
+                    'error_code': 'INVALID_USER_ID',
+                    'request_id': request_id
+                }), 400
+        elif not isinstance(user_id, int):
+            return jsonify({
+                'error': 'Invalid user ID format',
+                'error_code': 'INVALID_USER_ID',
+                'request_id': request_id
+            }), 400
+        
+        # 验证参数
+        if dish_id <= 0:
+            return jsonify({
+                'error': 'Invalid dish_id: must be positive',
+                'error_code': 'INVALID_DISH_ID',
+                'request_id': request_id
+            }), 400
+        
+        if user_id <= 0:
+            return jsonify({
+                'error': 'Invalid user ID: must be positive',
+                'error_code': 'INVALID_USER_ID',
+                'request_id': request_id
+            }), 400
+        
+        print(f"[Ratings API] Request ID: {request_id}, User ID: {user_id}, Dish ID: {dish_id}")
+        
+    except Exception as e:
+        import traceback
+        error_msg = str(e) if str(e) else traceback.format_exc()
+        print(f"[Ratings API] 参数验证失败: {error_msg}")
+        traceback.print_exc()
+        return jsonify({
+            'error': f'Parameter validation failed: {error_msg}',
+            'error_code': 'VALIDATION_ERROR',
+            'request_id': request_id
+        }), 400
     
     connection = db.get_connection()
     try:
@@ -79,9 +230,20 @@ def get_rating(dish_id):
                     'comment': rating[1]
                 }), 200
         else:
-            return jsonify({'rating': None}), 200
+            return jsonify({
+                'rating': None,
+                'request_id': request_id
+            }), 200
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        import traceback
+        error_msg = str(e) if str(e) else traceback.format_exc()
+        print(f"[Ratings API] 获取评分失败: {error_msg}")
+        traceback.print_exc()
+        return jsonify({
+            'error': error_msg,
+            'error_code': 'DATABASE_ERROR',
+            'request_id': request_id
+        }), 500
     finally:
         cursor.close()
 

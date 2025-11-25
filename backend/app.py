@@ -26,19 +26,88 @@ jwt = JWTManager(app)
 # JWT 错误处理
 @jwt.expired_token_loader
 def expired_token_callback(jwt_header, jwt_payload):
-    return jsonify({'error': 'Token has expired'}), 401
+    """Token 过期处理"""
+    import traceback
+    print(f"[JWT] Token expired - Header: {jwt_header}, Payload: {jwt_payload}")
+    traceback.print_exc()
+    return jsonify({
+        'error': 'Token has expired',
+        'error_code': 'TOKEN_EXPIRED',
+        'message': 'Please login again'
+    }), 401
 
 @jwt.invalid_token_loader
 def invalid_token_callback(error):
+    """无效 Token 处理"""
+    from flask import request
     import traceback
+    
     error_msg = str(error) if error else "Unknown error"
-    print(f"JWT 无效 token 错误: {error_msg}")
+    
+    # 获取请求信息用于调试
+    auth_header = request.headers.get('Authorization', 'Not provided')
+    request_id = request.headers.get('X-Request-ID', 'Not provided')
+    
+    print(f"[JWT] Invalid token error:")
+    print(f"  - Error: {error_msg}")
+    print(f"  - Authorization Header: {auth_header[:50]}..." if len(auth_header) > 50 else f"  - Authorization Header: {auth_header}")
+    print(f"  - Request ID: {request_id}")
+    print(f"  - URL: {request.url}")
+    print(f"  - Method: {request.method}")
+    print(f"  - All Headers: {dict(request.headers)}")
     traceback.print_exc()
-    return jsonify({'error': f'Invalid token: {error_msg}'}), 422
+    
+    # 检查是否是 Bearer token 格式问题
+    if auth_header and not auth_header.startswith('Bearer '):
+        error_msg = f"Invalid Authorization header format. Expected 'Bearer <token>', got: {auth_header[:20]}..."
+    
+    return jsonify({
+        'error': f'Invalid token: {error_msg}',
+        'error_code': 'INVALID_TOKEN',
+        'message': 'Please login again',
+        'request_id': request_id
+    }), 422
 
 @jwt.unauthorized_loader
 def missing_token_callback(error):
-    return jsonify({'error': 'Authorization header is missing'}), 401
+    """缺少 Token 处理"""
+    from flask import request
+    
+    request_id = request.headers.get('X-Request-ID', 'Not provided')
+    auth_header = request.headers.get('Authorization', 'Not provided')
+    
+    print(f"[JWT] Missing token:")
+    print(f"  - Request ID: {request_id}")
+    print(f"  - URL: {request.url}")
+    print(f"  - Method: {request.method}")
+    print(f"  - Authorization Header: {auth_header}")
+    
+    return jsonify({
+        'error': 'Authorization header is missing',
+        'error_code': 'MISSING_TOKEN',
+        'message': 'Please provide a valid token in Authorization header',
+        'request_id': request_id
+    }), 401
+
+# 添加请求前处理，记录请求信息
+@app.before_request
+def log_request_info():
+    """记录请求信息用于调试"""
+    from flask import request
+    import logging
+    
+    # 只在需要认证的路由上记录详细信息
+    if request.path.startswith('/api/v1'):
+        request_id = request.headers.get('X-Request-ID', 'N/A')
+        auth_header = request.headers.get('Authorization', 'Not provided')
+        
+        # 只记录前 50 个字符的 token，避免日志过长
+        if auth_header and len(auth_header) > 50:
+            auth_display = auth_header[:50] + "..."
+        else:
+            auth_display = auth_header
+        
+        logging.info(f"[Request] {request.method} {request.path} - Request ID: {request_id} - Auth: {auth_display}")
 
 # 注册蓝图
 app.register_blueprint(auth.bp, url_prefix=Config.API_PREFIX)
