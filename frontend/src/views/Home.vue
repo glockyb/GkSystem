@@ -28,16 +28,28 @@
             v-for="(dish, index) in recommendedDishes"
             :key="dish.id"
             class="dish-card modern-card"
+            :data-dish-id="dish.id"
             :body-style="{ padding: '0px' }"
             :style="{ animationDelay: `${index * 0.1}s` }"
           >
             <div class="dish-image-wrapper">
-              <img 
-                :src="getImageUrl(dish.image_url)" 
-                class="dish-image"
-                @error="handleImageError"
-                loading="lazy"
-              />
+              <div class="image-container">
+                <img 
+                  :src="getImageUrl(dish.image_url)" 
+                  class="dish-image"
+                  @error="handleImageError"
+                  @load="handleImageLoad"
+                  loading="lazy"
+                  :class="{ 'image-error': imageErrors.has(dish.id) }"
+                />
+                <div v-if="imageErrors.has(dish.id)" class="image-placeholder-overlay">
+                  <el-icon class="placeholder-icon"><Picture /></el-icon>
+                  <span class="placeholder-text">图片加载失败</span>
+                </div>
+                <div v-if="imageLoading.has(dish.id)" class="image-loading-overlay">
+                  <el-icon class="loading-icon is-loading"><Loading /></el-icon>
+                </div>
+              </div>
               <div class="dish-badge" v-if="dish.category">
                 {{ dish.category }}
               </div>
@@ -123,16 +135,28 @@
             v-for="(dish, index) in dishes"
             :key="dish.id"
             class="dish-card modern-card"
+            :data-dish-id="dish.id"
             :body-style="{ padding: '0px' }"
             :style="{ animationDelay: `${index * 0.05}s` }"
           >
             <div class="dish-image-wrapper">
-              <img 
-                :src="getImageUrl(dish.image_url)" 
-                class="dish-image"
-                @error="handleImageError"
-                loading="lazy"
-              />
+              <div class="image-container">
+                <img 
+                  :src="getImageUrl(dish.image_url)" 
+                  class="dish-image"
+                  @error="handleImageError"
+                  @load="handleImageLoad"
+                  loading="lazy"
+                  :class="{ 'image-error': imageErrors.has(dish.id) }"
+                />
+                <div v-if="imageErrors.has(dish.id)" class="image-placeholder-overlay">
+                  <el-icon class="placeholder-icon"><Picture /></el-icon>
+                  <span class="placeholder-text">图片加载失败</span>
+                </div>
+                <div v-if="imageLoading.has(dish.id)" class="image-loading-overlay">
+                  <el-icon class="loading-icon is-loading"><Loading /></el-icon>
+                </div>
+              </div>
               <div class="dish-badge" v-if="dish.category">
                 {{ dish.category }}
               </div>
@@ -174,7 +198,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useUserStore } from '../store/user'
 import api from '../api'
 import { ElMessage } from 'element-plus'
-import { Search, View, Box } from '@element-plus/icons-vue'
+import { Search, View, Box, Picture, Loading } from '@element-plus/icons-vue'
 
 const userStore = useUserStore()
 const activeTab = ref('recommendations')
@@ -188,6 +212,8 @@ const pageSize = ref(20)
 const total = ref(0)
 const recommendationsLoading = ref(false)
 const dishesLoading = ref(false)
+const imageErrors = ref(new Set())
+const imageLoading = ref(new Set())
 
 const loadRecommendations = async () => {
   if (!userStore.isLoggedIn) {
@@ -198,6 +224,16 @@ const loadRecommendations = async () => {
   try {
     const response = await api.recommendations.getList()
     recommendedDishes.value = response.dishes || []
+    
+    // 重置图片加载状态
+    imageErrors.value.clear()
+    imageLoading.value.clear()
+    // 标记所有图片为加载中
+    recommendedDishes.value.forEach(dish => {
+      if (dish.image_url) {
+        imageLoading.value.add(dish.id)
+      }
+    })
     
     // 加载每个推荐菜品的用户评分
     if (recommendedDishes.value.length > 0) {
@@ -237,8 +273,30 @@ const loadDishes = async () => {
       params.search = searchQuery.value
     }
     const response = await api.dishes.getList(params)
-    dishes.value = response.dishes || []
+    let dishesList = response.dishes || []
+    
+    // 去重处理（按 id 去重，避免重复显示）
+    const seenIds = new Set()
+    dishesList = dishesList.filter(dish => {
+      if (seenIds.has(dish.id)) {
+        return false
+      }
+      seenIds.add(dish.id)
+      return true
+    })
+    
+    dishes.value = dishesList
     total.value = response.total || dishes.value.length
+    
+    // 重置图片加载状态
+    imageErrors.value.clear()
+    imageLoading.value.clear()
+    // 标记所有图片为加载中
+    dishesList.forEach(dish => {
+      if (dish.image_url) {
+        imageLoading.value.add(dish.id)
+      }
+    })
     
     // 如果用户已登录，加载每个菜品的用户评分
     if (userStore.isLoggedIn && dishes.value.length > 0) {
@@ -359,7 +417,7 @@ const viewDish = (dishId) => {
 // 处理图片URL，确保路径正确
 const getImageUrl = (imageUrl) => {
   if (!imageUrl) {
-    return '/placeholder.jpg'
+    return null
   }
   // 如果已经是完整URL，直接返回
   if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
@@ -373,12 +431,32 @@ const getImageUrl = (imageUrl) => {
   return `/images/${imageUrl}`
 }
 
+const handleImageLoad = (event) => {
+  // 图片加载成功，移除加载状态和错误状态
+  const img = event.target
+  const dishCard = img.closest('.dish-card')
+  if (dishCard) {
+    const dishId = dishCard.dataset?.dishId
+    if (dishId) {
+      imageLoading.value.delete(parseInt(dishId))
+      imageErrors.value.delete(parseInt(dishId))
+    }
+  }
+}
+
 const handleImageError = (event) => {
-  // 图片加载失败时使用占位符
-  const placeholder = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjgwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjgwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iIzY2N2VlYSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiNmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj7lm77niYfliqDovb3lpLHotKU8L3RleHQ+PC9zdmc+'
-  // 避免无限循环
-  if (event.target.src !== placeholder) {
-    event.target.src = placeholder
+  const img = event.target
+  const dishCard = img.closest('.dish-card')
+  
+  if (dishCard) {
+    const dishId = dishCard.dataset?.dishId
+    if (dishId) {
+      // 标记为错误
+      imageErrors.value.add(parseInt(dishId))
+      imageLoading.value.delete(parseInt(dishId))
+      // 隐藏图片，显示占位符
+      img.style.display = 'none'
+    }
   }
 }
 
@@ -481,16 +559,86 @@ onMounted(() => {
   border-radius: 12px 12px 0 0;
 }
 
+.image-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
 .dish-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  display: block;
 }
 
-.dish-card:hover .dish-image {
+.dish-image.image-error {
+  opacity: 0;
+  display: none;
+}
+
+.dish-card:hover .dish-image:not(.image-error) {
   transform: scale(1.08);
+}
+
+.image-placeholder-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  color: #909399;
+  z-index: 1;
+}
+
+.placeholder-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+  opacity: 0.6;
+  color: #c0c4cc;
+}
+
+.placeholder-text {
+  font-size: 14px;
+  color: #909399;
+  font-weight: 500;
+}
+
+.image-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(4px);
+  z-index: 2;
+}
+
+.loading-icon {
+  font-size: 32px;
+  color: #667eea;
+  animation: rotate 1s linear infinite;
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .dish-badge {
@@ -526,6 +674,12 @@ onMounted(() => {
   color: #1a1a1a;
   line-height: 1.4;
   transition: color 0.3s ease;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-height: 56px;
 }
 
 .dish-card:hover .dish-name {
@@ -597,9 +751,10 @@ onMounted(() => {
   text-align: center;
   padding: 80px 20px;
   color: #909399;
-  background: #fff;
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  margin: 20px 0;
 }
 
 .empty-icon {

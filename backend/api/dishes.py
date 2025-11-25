@@ -39,8 +39,8 @@ def get_dishes():
             cursor = connection.cursor()
             print(f"[Dishes API] Request ID: {request_id}, 创建游标成功")
             
-            # 构建查询
-            query = "SELECT id, name, category, price, description, image_url, nutrition_info FROM dishes WHERE 1=1"
+            # 构建查询（使用 DISTINCT 去重）
+            query = "SELECT DISTINCT id, name, category, price, description, image_url, nutrition_info FROM dishes WHERE 1=1"
             params = []
             
             if category:
