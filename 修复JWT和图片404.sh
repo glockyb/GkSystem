@@ -64,15 +64,34 @@ if [ -f "/etc/nginx/sites-available/canteen" ]; then
         echo "⚠️ Nginx 图片路径配置不存在，添加配置..."
         
         # 备份配置
-        sudo cp /etc/nginx/sites-available/canteen /etc/nginx/sites-available/canteen.backup.$(date +%Y%m%d_%H%M%S)
+        backup_file="/etc/nginx/sites-available/canteen.backup.$(date +%Y%m%d_%H%M%S)"
+        sudo cp /etc/nginx/sites-available/canteen "$backup_file"
         
-        # 添加图片路径配置
-        sudo sed -i '/location \/api/a\
-    location /images {\
-        alias /var/www/canteen/images;\
-        expires 30d;\
-        add_header Cache-Control "public, immutable";\
-    }' /etc/nginx/sites-available/canteen
+        # 使用 awk 在 location /api 块之后添加图片配置
+        temp_file=$(mktemp)
+        sudo cp /etc/nginx/sites-available/canteen "$temp_file"
+        
+        sudo awk '
+        /location \/api {/ {
+            in_api = 1
+            print
+            next
+        }
+        in_api && /^[[:space:]]*}/ {
+            in_api = 0
+            print
+            print ""
+            print "    location /images {"
+            print "        alias /var/www/canteen/images;"
+            print "        expires 30d;"
+            print "        add_header Cache-Control \"public, immutable\";"
+            print "    }"
+            next
+        }
+        { print }
+        ' "$temp_file" | sudo tee /etc/nginx/sites-available/canteen > /dev/null
+        
+        rm -f "$temp_file"
         
         # 测试配置
         if sudo nginx -t 2>&1 | grep -q "successful"; then
@@ -81,8 +100,9 @@ if [ -f "/etc/nginx/sites-available/canteen" ]; then
         else
             echo "❌ Nginx 配置错误"
             sudo nginx -t
-            # 恢复备份
-            sudo cp /etc/nginx/sites-available/canteen.backup.* /etc/nginx/sites-available/canteen
+            echo "恢复备份配置..."
+            sudo cp "$backup_file" /etc/nginx/sites-available/canteen
+            echo "✅ 已恢复备份配置"
         fi
     fi
 fi
