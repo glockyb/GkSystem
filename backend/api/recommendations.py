@@ -19,20 +19,25 @@ def get_recommendations():
     n = request.args.get('n', Config.RECOMMENDATION_COUNT, type=int)
     
     # 尝试从Redis缓存获取
-    redis_client = db.get_redis()
-    cache_key = f'recommendations:user:{user_id}'
-    cached = redis_client.get(cache_key)
-    
-    if cached:
-        import json
-        dish_ids = json.loads(cached)
-    else:
-        # 生成推荐
-        dish_ids = recommender.recommend(user_id, n)
+    try:
+        redis_client = db.get_redis()
+        cache_key = f'recommendations:user:{user_id}'
+        cached = redis_client.get(cache_key)
         
-        # 缓存结果（1小时）
-        import json
-        redis_client.setex(cache_key, 3600, json.dumps(dish_ids))
+        if cached:
+            import json
+            dish_ids = json.loads(cached)
+        else:
+            # 生成推荐
+            dish_ids = recommender.recommend(user_id, n)
+            
+            # 缓存结果（1小时）
+            import json
+            redis_client.setex(cache_key, 3600, json.dumps(dish_ids))
+    except Exception as e:
+        # 如果 Redis 失败，直接生成推荐（不使用缓存）
+        print(f"Redis 错误: {e}")
+        dish_ids = recommender.recommend(user_id, n)
     
     # 获取菜品详情
     connection = db.get_connection()

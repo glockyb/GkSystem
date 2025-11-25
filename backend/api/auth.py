@@ -72,9 +72,21 @@ def login():
         if not user:
             return jsonify({'error': 'Invalid credentials'}), 401
         
-        user_id, password_hash = user
+        # 处理 DictCursor（返回字典）或普通 cursor（返回元组）
+        if isinstance(user, dict):
+            user_id = user.get('id')
+            password_hash = user.get('password_hash')
+        else:
+            user_id, password_hash = user
         
         # 验证密码
+        if not password_hash:
+            return jsonify({'error': 'Invalid credentials'}), 401
+        
+        # 确保 password_hash 是字符串
+        if isinstance(password_hash, bytes):
+            password_hash = password_hash.decode('utf-8')
+        
         if not bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8')):
             return jsonify({'error': 'Invalid credentials'}), 401
         
@@ -105,12 +117,21 @@ def get_profile():
         if not user:
             return jsonify({'error': 'User not found'}), 404
         
-        return jsonify({
-            'id': user[0],
-            'username': user[1],
-            'email': user[2],
-            'created_at': user[3].isoformat() if user[3] else None
-        }), 200
+        # 处理 DictCursor（返回字典）或普通 cursor（返回元组）
+        if isinstance(user, dict):
+            return jsonify({
+                'id': user.get('id'),
+                'username': user.get('username'),
+                'email': user.get('email'),
+                'created_at': user.get('created_at').isoformat() if user.get('created_at') else None
+            }), 200
+        else:
+            return jsonify({
+                'id': user[0],
+                'username': user[1],
+                'email': user[2],
+                'created_at': user[3].isoformat() if user[3] else None
+            }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
     finally:
