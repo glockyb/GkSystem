@@ -87,6 +87,9 @@ def get_recommendations():
         
         return jsonify({'dishes': result}), 200
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        import traceback
+        error_msg = str(e) if str(e) else traceback.format_exc()
+        print(f"推荐API错误: {error_msg}")
+        return jsonify({'error': error_msg}), 500
     finally:
         cursor.close()

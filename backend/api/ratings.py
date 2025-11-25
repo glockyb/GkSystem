@@ -44,7 +44,10 @@ def create_rating():
         return jsonify({'message': 'Rating created successfully'}), 201
     except Exception as e:
         connection.rollback()
-        return jsonify({'error': str(e)}), 500
+        import traceback
+        error_msg = str(e) if str(e) else traceback.format_exc()
+        print(f"评分API错误: {error_msg}")
+        return jsonify({'error': error_msg}), 500
     finally:
         cursor.close()
 

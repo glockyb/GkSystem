@@ -109,7 +109,12 @@ class CollaborativeFiltering:
             # 获取所有菜品
             cursor = connection.cursor()
             cursor.execute("SELECT id FROM dishes")
-            all_dishes = [row[0] for row in cursor.fetchall()]
+            rows = cursor.fetchall()
+            # 处理 DictCursor（返回字典）或普通 cursor（返回元组）
+            if rows and isinstance(rows[0], dict):
+                all_dishes = [row.get('id') for row in rows]
+            else:
+                all_dishes = [row[0] for row in rows]
             
             if not all_dishes:
                 return []
@@ -120,7 +125,12 @@ class CollaborativeFiltering:
                 UNION
                 SELECT dish_id FROM consumption_records WHERE user_id = %s
             """, (user_id, user_id))
-            rated_dishes = {row[0] for row in cursor.fetchall()}
+            rated_rows = cursor.fetchall()
+            # 处理 DictCursor
+            if rated_rows and isinstance(rated_rows[0], dict):
+                rated_dishes = {row.get('dish_id') for row in rated_rows}
+            else:
+                rated_dishes = {row[0] for row in rated_rows}
             
             # 预测未评价菜品的评分
             predictions = []
@@ -295,7 +305,12 @@ class HybridRecommender:
                 UNION
                 SELECT dish_id FROM consumption_records WHERE user_id = %s AND rating >= 4
             """, (user_id, user_id))
-            user_dishes = [row[0] for row in cursor.fetchall()]
+            rows = cursor.fetchall()
+            # 处理 DictCursor（返回字典）或普通 cursor（返回元组）
+            if rows and isinstance(rows[0], dict):
+                user_dishes = [row.get('dish_id') for row in rows]
+            else:
+                user_dishes = [row[0] for row in rows]
             
             # 内容推荐
             cb_recommendations = self.cb_recommender.recommend(user_dishes, n) if user_dishes else []
@@ -345,11 +360,24 @@ class HybridRecommender:
                 ORDER BY count DESC
                 LIMIT %s
             """, (n,))
-            return [row[0] for row in cursor.fetchall()]
-        except:
+            rows = cursor.fetchall()
+            # 处理 DictCursor（返回字典）或普通 cursor（返回元组）
+            if rows and isinstance(rows[0], dict):
+                return [row.get('dish_id') for row in rows]
+            else:
+                return [row[0] for row in rows]
+        except Exception as e:
+            print(f"获取热门菜品失败: {e}")
             # 如果失败，返回所有菜品
-            cursor.execute("SELECT id FROM dishes LIMIT %s", (n,))
-            return [row[0] for row in cursor.fetchall()]
+            try:
+                cursor.execute("SELECT id FROM dishes LIMIT %s", (n,))
+                rows = cursor.fetchall()
+                if rows and isinstance(rows[0], dict):
+                    return [row.get('id') for row in rows]
+                else:
+                    return [row[0] for row in rows]
+            except:
+                return []
         finally:
             cursor.close()
 
