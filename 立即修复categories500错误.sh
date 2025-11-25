@@ -94,12 +94,16 @@ fi
 # 6. 查看实时日志（如果有错误）
 echo ""
 echo "ℹ️ 步骤6: 检查是否有新错误..."
-recent_errors=$(sudo journalctl -u canteen-backend --since "1 minute ago" --no-pager | grep -i "error\|exception\|traceback\|categories" | tail -10)
+# 只查找真正的错误，排除 HTTP 200 等成功状态码
+recent_errors=$(sudo journalctl -u canteen-backend --since "1 minute ago" --no-pager | grep -iE "error|exception|traceback|failed|500|502|503|504" | grep -v "HTTP/1.1\" 200" | tail -10)
 if [ -n "$recent_errors" ]; then
     echo "⚠️ 发现新错误:"
     echo "$recent_errors"
 else
     echo "✅ 未发现新错误"
+    echo ""
+    echo "最近的成功请求:"
+    sudo journalctl -u canteen-backend --since "1 minute ago" --no-pager | grep "HTTP/1.1\" 200" | tail -5
 fi
 
 # 7. 如果仍有问题，提供诊断建议

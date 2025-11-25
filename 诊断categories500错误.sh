@@ -88,12 +88,32 @@ else
     python3 -m py_compile backend/api/dishes.py
 fi
 
-# 7. 测试 Python 导入和函数
+# 7. 测试 Python 导入和函数（使用虚拟环境）
 echo ""
-echo "ℹ️ 步骤7: 测试 Python 模块导入..."
+echo "ℹ️ 步骤7: 测试 Python 模块导入（使用虚拟环境）..."
 cd backend
-if python3 -c "
+
+# 检查虚拟环境
+if [ -d "../venv" ]; then
+    VENV_PYTHON="../venv/bin/python3"
+    echo "使用虚拟环境: $VENV_PYTHON"
+elif [ -d "venv" ]; then
+    VENV_PYTHON="venv/bin/python3"
+    echo "使用虚拟环境: $VENV_PYTHON"
+else
+    VENV_PYTHON="python3"
+    echo "⚠️ 未找到虚拟环境，使用系统 Python"
+fi
+
+# 检查 pymysql 是否安装
+if $VENV_PYTHON -c "import pymysql" 2>/dev/null; then
+    echo "✅ pymysql 模块已安装"
+    
+    # 测试数据库连接和查询
+    if $VENV_PYTHON -c "
 import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath('.')))
 sys.path.insert(0, '.')
 from utils.database import db
 try:
@@ -104,7 +124,8 @@ try:
         rows = cursor.fetchall()
         print(f'✅ 数据库查询成功，找到 {len(rows)} 个分类')
         if rows:
-            print('前 5 个分类:', [row.get('category') if isinstance(row, dict) else row[0] for row in rows[:5]])
+            categories = [row.get('category') if isinstance(row, dict) else row[0] for row in rows[:5]]
+            print('前 5 个分类:', categories)
         cursor.close()
     else:
         print('❌ 无法获取数据库连接')
@@ -113,9 +134,16 @@ except Exception as e:
     import traceback
     traceback.print_exc()
 " 2>&1; then
-    echo "✅ Python 模块和数据库查询测试完成"
+        echo "✅ Python 模块和数据库查询测试完成"
+    else
+        echo "❌ Python 数据库查询测试失败"
+    fi
 else
-    echo "❌ Python 模块测试失败"
+    echo "❌ pymysql 模块未安装"
+    echo "   请运行以下命令安装依赖:"
+    echo "   cd ~/gksys/GkSystem"
+    echo "   source venv/bin/activate"
+    echo "   pip install -r backend/requirements.txt"
 fi
 cd ..
 
