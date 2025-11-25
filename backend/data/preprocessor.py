@@ -159,10 +159,21 @@ class DataPreprocessor:
         return feature_df
     
     def pca_transform(self, feature_matrix):
-        """PCA降维到32维"""
-        if feature_matrix.shape[0] == 0:
+        """PCA降维到32维（或更少，取决于实际特征数）"""
+        if feature_matrix.shape[0] == 0 or feature_matrix.shape[1] == 0:
             return feature_matrix
-        pca_result = self.pca.fit_transform(feature_matrix)
+        
+        # 计算实际可降维的最大维度
+        # n_components 不能超过 min(n_samples, n_features)
+        max_components = min(32, feature_matrix.shape[0], feature_matrix.shape[1])
+        
+        # 如果特征数少于或等于目标维度，不进行降维
+        if feature_matrix.shape[1] <= max_components:
+            return feature_matrix
+        
+        # 动态创建 PCA，使用计算出的最大维度
+        pca = PCA(n_components=max_components)
+        pca_result = pca.fit_transform(feature_matrix)
         return pca_result
     
     def process_all(self):
