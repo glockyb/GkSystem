@@ -33,9 +33,10 @@
           >
             <div class="dish-image-wrapper">
               <img 
-                :src="dish.image_url || '/placeholder.jpg'" 
+                :src="getImageUrl(dish.image_url)" 
                 class="dish-image"
                 @error="handleImageError"
+                loading="lazy"
               />
               <div class="dish-badge" v-if="dish.category">
                 {{ dish.category }}
@@ -127,9 +128,10 @@
           >
             <div class="dish-image-wrapper">
               <img 
-                :src="dish.image_url || '/placeholder.jpg'" 
+                :src="getImageUrl(dish.image_url)" 
                 class="dish-image"
                 @error="handleImageError"
+                loading="lazy"
               />
               <div class="dish-badge" v-if="dish.category">
                 {{ dish.category }}
@@ -354,9 +356,30 @@ const viewDish = (dishId) => {
   ElMessage.info('查看详情功能开发中...')
 }
 
+// 处理图片URL，确保路径正确
+const getImageUrl = (imageUrl) => {
+  if (!imageUrl) {
+    return '/placeholder.jpg'
+  }
+  // 如果已经是完整URL，直接返回
+  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+    return imageUrl
+  }
+  // 如果以 / 开头，直接使用（相对路径）
+  if (imageUrl.startsWith('/')) {
+    return imageUrl
+  }
+  // 否则添加 /images/ 前缀
+  return `/images/${imageUrl}`
+}
+
 const handleImageError = (event) => {
   // 图片加载失败时使用占位符
-  event.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjgwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjgwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iIzY2N2VlYSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiNmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj7lm77niYfliqDovb3lpLHotKU8L3RleHQ+PC9zdmc+'
+  const placeholder = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjgwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjgwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iIzY2N2VlYSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiNmZmYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj7lm77niYfliqDovb3lpLHotKU8L3RleHQ+PC9zdmc+'
+  // 避免无限循环
+  if (event.target.src !== placeholder) {
+    event.target.src = placeholder
+  }
 }
 
 onMounted(() => {
@@ -385,6 +408,10 @@ onMounted(() => {
   gap: 16px;
   margin-bottom: 24px;
   flex-wrap: wrap;
+  padding: 20px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .search-input {
@@ -393,8 +420,23 @@ onMounted(() => {
   max-width: 400px;
 }
 
+.search-input :deep(.el-input__wrapper) {
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+}
+
+.search-input :deep(.el-input__wrapper:hover) {
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+}
+
 .category-select {
   width: 200px;
+}
+
+.category-select :deep(.el-input__wrapper) {
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .dishes-grid {
@@ -409,6 +451,14 @@ onMounted(() => {
   animation: fadeInUp 0.6s ease-out backwards;
   border: none;
   overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.dish-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
 }
 
 @keyframes fadeInUp {
@@ -425,46 +475,61 @@ onMounted(() => {
 .dish-image-wrapper {
   position: relative;
   width: 100%;
-  height: 220px;
+  height: 240px;
   overflow: hidden;
-  background: var(--gradient-primary);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px 12px 0 0;
 }
 
 .dish-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.5s ease;
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
 }
 
 .dish-card:hover .dish-image {
-  transform: scale(1.1);
+  transform: scale(1.08);
 }
 
 .dish-badge {
   position: absolute;
   top: 12px;
   right: 12px;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(10px);
-  padding: 4px 12px;
-  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  padding: 6px 14px;
+  border-radius: 20px;
   font-size: 12px;
-  font-weight: 500;
-  color: var(--primary-color);
-  box-shadow: var(--shadow-sm);
+  font-weight: 600;
+  color: #667eea;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  transition: all 0.3s ease;
+}
+
+.dish-card:hover .dish-badge {
+  background: rgba(255, 255, 255, 1);
+  transform: scale(1.05);
 }
 
 .dish-info {
-  padding: 20px;
+  padding: 24px;
+  background: #fff;
 }
 
 .dish-name {
   margin: 0 0 12px 0;
   font-size: 20px;
-  font-weight: 600;
-  color: #303133;
+  font-weight: 700;
+  color: #1a1a1a;
   line-height: 1.4;
+  transition: color 0.3s ease;
+}
+
+.dish-card:hover .dish-name {
+  color: #667eea;
 }
 
 .dish-price {
@@ -475,15 +540,19 @@ onMounted(() => {
 }
 
 .price-symbol {
-  color: #f56c6c;
-  font-size: 16px;
-  font-weight: 600;
+  color: #ff6b6b;
+  font-size: 18px;
+  font-weight: 700;
 }
 
 .price-value {
-  color: #f56c6c;
-  font-size: 24px;
-  font-weight: 700;
+  color: #ff6b6b;
+  font-size: 28px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .dish-description {
