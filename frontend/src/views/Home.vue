@@ -196,8 +196,26 @@ const loadRecommendations = async () => {
   try {
     const response = await api.recommendations.getList()
     recommendedDishes.value = response.dishes || []
+    
+    // 加载每个推荐菜品的用户评分
+    if (recommendedDishes.value.length > 0) {
+      for (const dish of recommendedDishes.value) {
+        try {
+          const ratingResponse = await api.ratings.get(dish.id)
+          if (ratingResponse.rating) {
+            dish.rating = ratingResponse.rating
+          } else {
+            dish.rating = 0
+          }
+        } catch (error) {
+          dish.rating = 0
+        }
+      }
+    }
   } catch (error) {
-    ElMessage.error('加载推荐失败')
+    console.error('加载推荐失败', error)
+    const errorMsg = error.response?.data?.error || error.message || '加载推荐失败'
+    ElMessage.error(`加载推荐失败: ${errorMsg}`)
   } finally {
     recommendationsLoading.value = false
   }
@@ -219,10 +237,33 @@ const loadDishes = async () => {
     const response = await api.dishes.getList(params)
     dishes.value = response.dishes || []
     total.value = response.total || dishes.value.length
+    
+    // 如果用户已登录，加载每个菜品的用户评分
+    if (userStore.isLoggedIn && dishes.value.length > 0) {
+      await loadUserRatings()
+    }
   } catch (error) {
+    console.error('加载菜品失败', error)
     ElMessage.error('加载菜品失败')
   } finally {
     dishesLoading.value = false
+  }
+}
+
+const loadUserRatings = async () => {
+  // 为每个菜品加载用户评分
+  for (const dish of dishes.value) {
+    try {
+      const ratingResponse = await api.ratings.get(dish.id)
+      if (ratingResponse.rating) {
+        dish.rating = ratingResponse.rating
+      } else {
+        dish.rating = 0
+      }
+    } catch (error) {
+      // 如果获取评分失败，设置为0
+      dish.rating = 0
+    }
   }
 }
 
@@ -253,11 +294,46 @@ const handleRatingChange = async (dishId, rating) => {
     ElMessage.warning('请先登录')
     return
   }
+  
+  if (!rating || rating < 1 || rating > 5) {
+    ElMessage.warning('请选择1-5星的评分')
+    return
+  }
+  
   try {
-    await api.ratings.create({ dish_id: dishId, rating })
+    const response = await api.ratings.create({ dish_id: dishId, rating })
     ElMessage.success('评分成功')
+    
+    // 更新本地数据
+    const dish = dishes.value.find(d => d.id === dishId)
+    if (dish) {
+      dish.rating = rating
+    }
+    
+    // 更新推荐列表中的评分
+    const recDish = recommendedDishes.value.find(d => d.id === dishId)
+    if (recDish) {
+      recDish.rating = rating
+    }
   } catch (error) {
-    ElMessage.error('评分失败')
+    console.error('评分失败', error)
+    const errorMsg = error.response?.data?.error || error.message || '评分失败'
+    ElMessage.error(`评分失败: ${errorMsg}`)
+    
+    // 恢复原来的评分
+    try {
+      const ratingResponse = await api.ratings.get(dishId)
+      const dish = dishes.value.find(d => d.id === dishId)
+      if (dish) {
+        dish.rating = ratingResponse.rating || 0
+      }
+    } catch (e) {
+      // 如果获取失败，设置为0
+      const dish = dishes.value.find(d => d.id === dishId)
+      if (dish) {
+        dish.rating = 0
+      }
+    }
   }
 }
 
