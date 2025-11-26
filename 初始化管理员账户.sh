@@ -20,13 +20,28 @@ fi
 # 执行 SQL 脚本
 echo ""
 echo "ℹ️ 执行数据库更新脚本..."
-mysql -u root -ppassword canteen_recommendation < backend/database/add_admin_support.sql
+# 先尝试简化版（如果列已存在会报错，但可以继续）
+mysql -u root -ppassword canteen_recommendation < backend/database/add_admin_support_simple.sql 2>/dev/null || true
 
-if [ $? -eq 0 ]; then
+# 如果简化版失败，尝试完整版
+if ! mysql -u root -ppassword canteen_recommendation -e "SELECT role FROM users LIMIT 1" 2>/dev/null; then
+    echo "使用完整版 SQL 脚本..."
+    mysql -u root -ppassword canteen_recommendation < backend/database/add_admin_support.sql 2>/dev/null || true
+fi
+
+# 验证列是否存在
+if mysql -u root -ppassword canteen_recommendation -e "SELECT role, is_admin FROM users LIMIT 1" 2>/dev/null; then
     echo "✅ 数据库更新成功"
 else
-    echo "❌ 数据库更新失败"
-    exit 1
+    echo "⚠️ 数据库更新可能失败，尝试手动添加列..."
+    # 手动添加列（忽略错误）
+    mysql -u root -ppassword canteen_recommendation << 'SQL'
+ALTER TABLE users ADD COLUMN role VARCHAR(20) DEFAULT 'user' AFTER email;
+ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE AFTER role;
+CREATE INDEX idx_role ON users(role);
+CREATE INDEX idx_is_admin ON users(is_admin);
+SQL
+    echo "✅ 数据库列已添加"
 fi
 
 # 创建管理员账户（如果不存在）

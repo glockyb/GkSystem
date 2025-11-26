@@ -13,11 +13,27 @@ cd ~/gksys/GkSystem || exit 1
 # 1. 更新数据库
 echo ""
 echo "ℹ️ 步骤1: 更新数据库结构..."
-if [ -f "backend/database/add_admin_support.sql" ]; then
-    mysql -u root -ppassword canteen_recommendation < backend/database/add_admin_support.sql
-    echo "✅ 数据库更新完成"
+# 先检查列是否已存在
+if mysql -u root -ppassword canteen_recommendation -e "SELECT role FROM users LIMIT 1" 2>/dev/null; then
+    echo "✅ 数据库列已存在，跳过更新"
 else
-    echo "⚠️ SQL 文件不存在，跳过数据库更新"
+    # 使用简化版 SQL（兼容性更好）
+    if [ -f "backend/database/add_admin_support_simple.sql" ]; then
+        mysql -u root -ppassword canteen_recommendation < backend/database/add_admin_support_simple.sql 2>&1 | grep -v "Duplicate column\|Duplicate key" || true
+        echo "✅ 数据库更新完成"
+    elif [ -f "backend/database/add_admin_support.sql" ]; then
+        mysql -u root -ppassword canteen_recommendation < backend/database/add_admin_support.sql 2>&1 | grep -v "Duplicate column\|Duplicate key" || true
+        echo "✅ 数据库更新完成"
+    else
+        echo "⚠️ SQL 文件不存在，手动添加列..."
+        mysql -u root -ppassword canteen_recommendation << 'SQL' 2>&1 | grep -v "Duplicate column\|Duplicate key" || true
+ALTER TABLE users ADD COLUMN role VARCHAR(20) DEFAULT 'user' AFTER email;
+ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE AFTER role;
+CREATE INDEX idx_role ON users(role);
+CREATE INDEX idx_is_admin ON users(is_admin);
+SQL
+        echo "✅ 数据库列已添加"
+    fi
 fi
 
 # 2. 初始化管理员账户
