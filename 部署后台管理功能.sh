@@ -103,9 +103,104 @@ else
     exit 1
 fi
 
-# 4. 重新构建和部署前端
+# 4. 修复图片加载问题
 echo ""
-echo "ℹ️ 步骤4: 重新构建和部署前端..."
+echo "ℹ️ 步骤4: 修复图片加载问题..."
+BACKEND_IMAGES_DIR="backend/static/images"
+NGINX_IMAGES_DIR="/var/www/canteen/images"
+
+# 创建图片目录
+mkdir -p "$BACKEND_IMAGES_DIR"
+
+# 创建占位图片的SVG内容
+PLACEHOLDER_SVG='<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#667eea;stop-opacity:1" /><stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" /></linearGradient></defs><rect width="400" height="300" fill="url(#grad)"/><circle cx="200" cy="120" r="40" fill="rgba(255,255,255,0.3)"/><path d="M 180 120 L 200 100 L 220 120 L 200 140 Z" fill="rgba(255,255,255,0.5)"/><text x="200" y="200" font-family="Arial" font-size="16" fill="rgba(255,255,255,0.8)" text-anchor="middle">菜品图片</text></svg>'
+
+# 从数据库获取所有图片URL，创建占位图片
+python3 << 'PYTHON_SCRIPT'
+import pymysql
+import os
+
+try:
+    connection = pymysql.connect(
+        host='localhost',
+        user='root',
+        password='password',
+        database='canteen_recommendation',
+        charset='utf8mb4'
+    )
+    
+    cursor = connection.cursor()
+    cursor.execute("SELECT DISTINCT image_url FROM dishes WHERE image_url IS NOT NULL AND image_url != ''")
+    image_urls = cursor.fetchall()
+    
+    images_dir = 'backend/static/images'
+    os.makedirs(images_dir, exist_ok=True)
+    
+    placeholder_svg = '''<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#667eea;stop-opacity:1" /><stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" /></linearGradient></defs><rect width="400" height="300" fill="url(#grad)"/><circle cx="200" cy="120" r="40" fill="rgba(255,255,255,0.3)"/><path d="M 180 120 L 200 100 L 220 120 L 200 140 Z" fill="rgba(255,255,255,0.5)"/><text x="200" y="200" font-family="Arial" font-size="16" fill="rgba(255,255,255,0.8)" text-anchor="middle">菜品图片</text></svg>'''
+    
+    created = 0
+    for row in image_urls:
+        if isinstance(row, dict):
+            image_url = row.get('image_url')
+        else:
+            image_url = row[0]
+        
+        if image_url:
+            # 提取文件名
+            if image_url.startswith('/images/'):
+                filename = image_url.split('/')[-1]
+            elif '/' in image_url:
+                filename = image_url.split('/')[-1]
+            else:
+                filename = image_url
+            
+            filepath = os.path.join(images_dir, filename)
+            if not os.path.exists(filepath):
+                with open(filepath, 'w') as f:
+                    f.write(placeholder_svg)
+                created += 1
+    
+    print(f"✅ 创建了 {created} 个占位图片")
+    
+    cursor.close()
+    connection.close()
+except Exception as e:
+    print(f"⚠️ 创建占位图片时出错: {e}")
+PYTHON_SCRIPT
+
+# 设置权限
+chmod -R 755 "$BACKEND_IMAGES_DIR"
+find "$BACKEND_IMAGES_DIR" -type f -exec chmod 644 {} \;
+
+# 复制图片到 Nginx 目录
+sudo mkdir -p "$NGINX_IMAGES_DIR"
+sudo rm -rf "$NGINX_IMAGES_DIR"/*
+sudo cp -r "$BACKEND_IMAGES_DIR"/* "$NGINX_IMAGES_DIR/" 2>/dev/null || true
+sudo chown -R www-data:www-data "$NGINX_IMAGES_DIR"
+sudo find "$NGINX_IMAGES_DIR" -type d -exec chmod 755 {} \;
+sudo find "$NGINX_IMAGES_DIR" -type f -exec chmod 644 {} \;
+
+# 检查并修复 Nginx 配置
+NGINX_CONFIG="/etc/nginx/sites-available/canteen"
+if ! sudo grep -q "location /images" "$NGINX_CONFIG"; then
+    echo "添加 Nginx /images 配置..."
+    sudo tee -a "$NGINX_CONFIG" > /dev/null << 'NGINX_CONFIG_EOF'
+
+    location /images {
+        alias /var/www/canteen/images;
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+        access_log off;
+    }
+NGINX_CONFIG_EOF
+    sudo nginx -t && sudo systemctl reload nginx
+fi
+
+echo "✅ 图片加载问题已修复"
+
+# 5. 重新构建和部署前端
+echo ""
+echo "ℹ️ 步骤5: 重新构建和部署前端..."
 cd frontend
 
 # 清理旧的构建

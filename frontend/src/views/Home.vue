@@ -430,18 +430,33 @@ const viewDish = (dishId) => {
 
 // 处理图片URL，确保路径正确
 const getImageUrl = (imageUrl) => {
-  if (!imageUrl) {
-    // 返回占位符
+  if (!imageUrl || imageUrl.trim() === '') {
+    // 返回占位符（base64 SVG）
     return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImdyYWQiIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjEwMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0eWxlPSJzdG9wLWNvbG9yOiM2NjdlZWE7c3RvcC1vcGFjaXR5OjEiIC8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdHlsZT0ic3RvcC1jb2xvcjojNzY0YmEyO3N0b3Atb3BhY2l0eToxIiAvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjxyZWN0IHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIiBmaWxsPSJ1cmwoI2dyYWQpIi8+PGNpcmNsZSBjeD0iMjAwIiBjeT0iMTIwIiByPSI0MCIgZmlsbD0icmdiYSgyNTUsMjU1LDI1NSwwLjMpIi8+PHBhdGggZD0iTSAxODAgMTIwIEwgMjAwIDEwMCBMIDIyMCAxMjAgTCAyMDAgMTQwIFoiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC41KSIvPjx0ZXh0IHg9IjIwMCIgeT0iMjAwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9InJnYmEoMjU1LDI1NSwyNTUsMC44KSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+56eR5oqA5Zu+54mHPC90ZXh0Pjwvc3ZnPg=='
   }
+  
+  // 清理 URL（去除前后空格）
+  imageUrl = imageUrl.trim()
+  
   // 如果已经是完整URL，直接返回
   if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
     return imageUrl
   }
-  // 如果以 / 开头，直接使用（相对路径，通过 Nginx 代理）
+  
+  // 如果以 / 开头，确保是 /images/ 路径
   if (imageUrl.startsWith('/')) {
+    // 如果已经是 /images/ 开头，直接返回
+    if (imageUrl.startsWith('/images/')) {
+      return imageUrl
+    }
+    // 如果是其他路径，尝试转换为 /images/ 路径
+    const filename = imageUrl.split('/').pop()
+    if (filename) {
+      return `/images/${filename}`
+    }
     return imageUrl
   }
+  
   // 否则添加 /images/ 前缀
   return `/images/${imageUrl}`
 }
@@ -462,15 +477,42 @@ const handleImageLoad = (event) => {
 const handleImageError = (event) => {
   const img = event.target
   const dishCard = img.closest('.dish-card')
+  let dishId = null
   
   if (dishCard) {
-    const dishId = dishCard.dataset?.dishId
-    if (dishId) {
-      // 标记为错误
-      imageErrors.value.add(parseInt(dishId))
-      imageLoading.value.delete(parseInt(dishId))
-      // 隐藏图片，显示占位符
-      img.style.display = 'none'
+    dishId = dishCard.dataset?.dishId
+    if (!dishId) {
+      const dishesList = [...dishes.value, ...recommendedDishes.value]
+      const index = Array.from(document.querySelectorAll('.dish-card')).indexOf(dishCard)
+      if (index >= 0 && dishesList[index]) {
+        dishId = dishesList[index].id
+      }
+    }
+  }
+  
+  // 标记为错误
+  if (dishId) {
+    imageErrors.value.add(parseInt(dishId))
+    imageLoading.value.delete(parseInt(dishId))
+  }
+  
+  // 隐藏图片，显示占位符
+  img.style.display = 'none'
+  
+  // 尝试重新加载（如果路径可能有问题）
+  const currentSrc = img.src
+  if (currentSrc && !currentSrc.includes('data:image')) {
+    const url = new URL(currentSrc, window.location.origin)
+    if (url.pathname && !url.pathname.startsWith('/images/')) {
+      const filename = url.pathname.split('/').pop()
+      if (filename) {
+        // 延迟重试，避免无限循环
+        setTimeout(() => {
+          if (img.src === currentSrc) {
+            img.src = `/images/${filename}`
+          }
+        }, 100)
+      }
     }
   }
 }
