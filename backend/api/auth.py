@@ -133,33 +133,79 @@ def get_profile():
     connection = db.get_connection()
     request_id = request.headers.get('X-Request-ID', 'N/A')
     try:
-        cursor = connection.cursor()
-        cursor.execute("SELECT id, username, email, role, is_admin, created_at FROM users WHERE id = %s", (user_id,))
+        # 使用 DictCursor 以便更好地处理字段
+        cursor = connection.cursor(pymysql.cursors.DictCursor)
+        
+        # 先检查字段是否存在，如果不存在则使用基本查询
+        try:
+            cursor.execute("SELECT id, username, email, role, is_admin, created_at FROM users WHERE id = %s", (user_id,))
+        except pymysql.Error as e:
+            # 如果字段不存在，使用基本查询
+            if 'Unknown column' in str(e):
+                print(f"[Profile API] role/is_admin 字段不存在，使用基本查询")
+                cursor.execute("SELECT id, username, email, created_at FROM users WHERE id = %s", (user_id,))
+            else:
+                raise
+        
         user = cursor.fetchone()
         
         if not user:
-            return jsonify({'error': 'User not found'}), 404
-        
-        # 处理 DictCursor（返回字典）或普通 cursor（返回元组）
-        if isinstance(user, dict):
             return jsonify({
+                'error': 'User not found',
+                'error_code': 'USER_NOT_FOUND',
+                'request_id': request_id
+            }), 404
+        
+        # 处理 DictCursor（返回字典）
+        if isinstance(user, dict):
+            user_data = {
                 'id': user.get('id'),
                 'username': user.get('username'),
                 'email': user.get('email'),
-                'role': user.get('role', 'user'),
-                'is_admin': bool(user.get('is_admin', 0)),
                 'created_at': user.get('created_at').isoformat() if user.get('created_at') else None
-            }), 200
+            }
+            
+            # 如果字段存在，添加角色信息
+            if 'role' in user:
+                user_data['role'] = user.get('role', 'user')
+            else:
+                user_data['role'] = 'user'
+            
+            if 'is_admin' in user:
+                user_data['is_admin'] = bool(user.get('is_admin', 0))
+            else:
+                user_data['is_admin'] = False
+            
+            return jsonify(user_data), 200
         else:
-            return jsonify({
+            # 处理普通 cursor（返回元组）- 兼容旧代码
+            user_data = {
                 'id': user[0],
                 'username': user[1],
-                'email': user[2],
-                'role': user[3] if len(user) > 3 else 'user',
-                'is_admin': bool(user[4] if len(user) > 4 else 0),
-                'created_at': user[5].isoformat() if len(user) > 5 and user[5] else None
-            }), 200
+                'email': user[2] if len(user) > 2 else None,
+                'role': 'user',
+                'is_admin': False,
+                'created_at': user[3].isoformat() if len(user) > 3 and user[3] else None
+            }
+            
+            # 如果返回了更多字段，尝试获取角色信息
+            if len(user) > 4:
+                user_data['role'] = user[3] if user[3] else 'user'
+                user_data['is_admin'] = bool(user[4] if len(user) > 4 else 0)
+                if len(user) > 5:
+                    user_data['created_at'] = user[5].isoformat() if user[5] else None
+            
+            return jsonify(user_data), 200
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        import traceback
+        error_msg = str(e) if str(e) else traceback.format_exc()
+        print(f"[Profile API] 错误: {error_msg}")
+        traceback.print_exc()
+        return jsonify({
+            'error': error_msg,
+            'error_code': 'PROFILE_ERROR',
+            'request_id': request_id
+        }), 500
     finally:
-        cursor.close()
+        if 'cursor' in locals():
+            cursor.close()
