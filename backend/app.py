@@ -12,7 +12,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config import Config
-from api import auth, dishes, recommendations, ratings
+from api import auth, dishes, recommendations, ratings, admin
 
 app = Flask(__name__)
 app.config.from_object(Config)

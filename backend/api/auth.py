@@ -130,24 +130,41 @@ def get_profile():
     except (ValueError, TypeError):
         return jsonify({'error': 'Invalid user ID format'}), 400
     
-    connection = db.get_connection()
+    connection = None
+    cursor = None
     request_id = request.headers.get('X-Request-ID', 'N/A')
+    
     try:
-        # 使用 DictCursor 以便更好地处理字段
-        cursor = connection.cursor(pymysql.cursors.DictCursor)
+        connection = db.get_connection()
+        if not connection:
+            raise Exception("无法获取数据库连接")
         
-        # 先检查字段是否存在，如果不存在则使用基本查询
+        # database.py 已经设置了 DictCursor，直接使用即可
+        cursor = connection.cursor()
+        
+        # 先尝试查询包含 role 和 is_admin 的完整字段
+        query_success = False
+        user = None
+        
         try:
             cursor.execute("SELECT id, username, email, role, is_admin, created_at FROM users WHERE id = %s", (user_id,))
+            user = cursor.fetchone()
+            query_success = True
         except pymysql.Error as e:
+            error_str = str(e)
             # 如果字段不存在，使用基本查询
-            if 'Unknown column' in str(e):
+            if 'Unknown column' in error_str or 'role' in error_str or 'is_admin' in error_str:
                 print(f"[Profile API] role/is_admin 字段不存在，使用基本查询")
-                cursor.execute("SELECT id, username, email, created_at FROM users WHERE id = %s", (user_id,))
+                try:
+                    cursor.execute("SELECT id, username, email, created_at FROM users WHERE id = %s", (user_id,))
+                    user = cursor.fetchone()
+                    query_success = True
+                except Exception as e2:
+                    print(f"[Profile API] 基本查询也失败: {e2}")
+                    raise
             else:
+                print(f"[Profile API] 数据库查询错误: {error_str}")
                 raise
-        
-        user = cursor.fetchone()
         
         if not user:
             return jsonify({
@@ -156,23 +173,30 @@ def get_profile():
                 'request_id': request_id
             }), 404
         
-        # 处理 DictCursor（返回字典）
+        # 处理 DictCursor（返回字典）- database.py 默认使用 DictCursor
         if isinstance(user, dict):
             user_data = {
                 'id': user.get('id'),
-                'username': user.get('username'),
-                'email': user.get('email'),
+                'username': user.get('username') or '',
+                'email': user.get('email') or '',
                 'created_at': user.get('created_at').isoformat() if user.get('created_at') else None
             }
             
             # 如果字段存在，添加角色信息
             if 'role' in user:
-                user_data['role'] = user.get('role', 'user')
+                user_data['role'] = user.get('role') or 'user'
             else:
                 user_data['role'] = 'user'
             
             if 'is_admin' in user:
-                user_data['is_admin'] = bool(user.get('is_admin', 0))
+                is_admin_val = user.get('is_admin')
+                # 处理不同的布尔值表示方式
+                if isinstance(is_admin_val, bool):
+                    user_data['is_admin'] = is_admin_val
+                elif isinstance(is_admin_val, (int, str)):
+                    user_data['is_admin'] = bool(int(is_admin_val))
+                else:
+                    user_data['is_admin'] = False
             else:
                 user_data['is_admin'] = False
             
@@ -180,9 +204,9 @@ def get_profile():
         else:
             # 处理普通 cursor（返回元组）- 兼容旧代码
             user_data = {
-                'id': user[0],
-                'username': user[1],
-                'email': user[2] if len(user) > 2 else None,
+                'id': user[0] if len(user) > 0 else None,
+                'username': user[1] if len(user) > 1 else '',
+                'email': user[2] if len(user) > 2 else '',
                 'role': 'user',
                 'is_admin': False,
                 'created_at': user[3].isoformat() if len(user) > 3 and user[3] else None
@@ -191,15 +215,26 @@ def get_profile():
             # 如果返回了更多字段，尝试获取角色信息
             if len(user) > 4:
                 user_data['role'] = user[3] if user[3] else 'user'
-                user_data['is_admin'] = bool(user[4] if len(user) > 4 else 0)
+                user_data['is_admin'] = bool(int(user[4])) if len(user) > 4 and user[4] is not None else False
                 if len(user) > 5:
                     user_data['created_at'] = user[5].isoformat() if user[5] else None
             
             return jsonify(user_data), 200
+            
+    except pymysql.Error as db_error:
+        import traceback
+        error_msg = f"Database error: {str(db_error)}"
+        print(f"[Profile API] 数据库错误: {error_msg}")
+        traceback.print_exc()
+        return jsonify({
+            'error': error_msg,
+            'error_code': 'DATABASE_ERROR',
+            'request_id': request_id
+        }), 500
     except Exception as e:
         import traceback
         error_msg = str(e) if str(e) else traceback.format_exc()
-        print(f"[Profile API] 错误: {error_msg}")
+        print(f"[Profile API] 未知错误: {error_msg}")
         traceback.print_exc()
         return jsonify({
             'error': error_msg,
@@ -207,5 +242,9 @@ def get_profile():
             'request_id': request_id
         }), 500
     finally:
-        if 'cursor' in locals():
-            cursor.close()
+        if cursor:
+            try:
+                cursor.close()
+            except:
+                pass
+        # 注意：不要关闭 connection，因为 db.get_connection() 可能使用连接池
