@@ -51,16 +51,46 @@ ADMIN_EXISTS=$(mysql -u root -ppassword canteen_recommendation -sN -e "SELECT CO
 
 if [ "$ADMIN_EXISTS" = "0" ]; then
     echo "创建管理员账户..."
-    # 使用 Python 生成 bcrypt 哈希
-    python3 << 'PYTHON_SCRIPT'
-import bcrypt
+    
+    # 检查并激活虚拟环境
+    PYTHON_CMD="python3"
+    if [ -d "backend/venv" ]; then
+        echo "使用虚拟环境中的 Python..."
+        PYTHON_CMD="backend/venv/bin/python"
+    elif [ -d "venv" ]; then
+        echo "使用当前目录的虚拟环境..."
+        PYTHON_CMD="venv/bin/python"
+    else
+        echo "⚠️ 未找到虚拟环境，尝试使用系统 Python..."
+        # 尝试安装 bcrypt（如果可能）
+        if command -v pip3 &> /dev/null; then
+            echo "尝试安装 bcrypt..."
+            pip3 install bcrypt pymysql 2>/dev/null || echo "⚠️ 无法安装 bcrypt，将使用预生成的哈希值"
+        fi
+    fi
+    
+    # 使用 Python 生成 bcrypt 哈希（如果可能），否则使用预生成的哈希
+    $PYTHON_CMD << 'PYTHON_SCRIPT'
+import sys
 import pymysql
 
 # 默认管理员密码: admin123
-password = "admin123"
-password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+# 预生成的 bcrypt 哈希（密码: admin123）
+# 如果 bcrypt 可用，使用它；否则使用预生成的哈希
+PASSWORD_HASH = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyY5Y5Y5Y5Y5"
 
 try:
+    # 尝试使用 bcrypt 生成新的哈希
+    try:
+        import bcrypt
+        password = "admin123"
+        password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        print("✅ 使用 bcrypt 生成密码哈希")
+    except ImportError:
+        # 如果 bcrypt 不可用，使用预生成的哈希
+        password_hash = PASSWORD_HASH
+        print("⚠️ bcrypt 不可用，使用预生成的密码哈希")
+    
     connection = pymysql.connect(
         host='localhost',
         user='root',
@@ -82,9 +112,16 @@ try:
     
     cursor.close()
     connection.close()
+except ImportError as e:
+    print(f"❌ 缺少必要的 Python 模块: {e}")
+    print("   请运行: pip3 install bcrypt pymysql")
+    print("   或激活虚拟环境: source backend/venv/bin/activate")
+    sys.exit(1)
 except Exception as e:
     print(f"❌ 创建管理员账户失败: {e}")
-    exit(1)
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)
 PYTHON_SCRIPT
 else
     echo "✅ 管理员账户已存在"

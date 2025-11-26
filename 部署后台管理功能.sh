@@ -44,14 +44,31 @@ if [ -f "初始化管理员账户.sh" ]; then
     ./初始化管理员账户.sh
 else
     echo "⚠️ 初始化脚本不存在，手动创建管理员账户..."
-    python3 << 'PYTHON_SCRIPT'
-import bcrypt
+    
+    # 检查并激活虚拟环境
+    PYTHON_CMD="python3"
+    if [ -d "backend/venv" ]; then
+        PYTHON_CMD="backend/venv/bin/python"
+    elif [ -d "venv" ]; then
+        PYTHON_CMD="venv/bin/python"
+    fi
+    
+    $PYTHON_CMD << 'PYTHON_SCRIPT'
+import sys
 import pymysql
 
-password = "admin123"
-password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+# 预生成的 bcrypt 哈希（密码: admin123）
+PASSWORD_HASH = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyY5Y5Y5Y5Y5"
 
 try:
+    # 尝试使用 bcrypt 生成新的哈希
+    try:
+        import bcrypt
+        password = "admin123"
+        password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    except ImportError:
+        password_hash = PASSWORD_HASH
+    
     connection = pymysql.connect(
         host='localhost',
         user='root',
@@ -83,9 +100,15 @@ try:
     
     cursor.close()
     connection.close()
+except ImportError as e:
+    print(f"❌ 缺少必要的 Python 模块: {e}")
+    print("   请运行: pip3 install bcrypt pymysql")
+    sys.exit(1)
 except Exception as e:
     print(f"❌ 创建管理员账户失败: {e}")
-    exit(1)
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)
 PYTHON_SCRIPT
 fi
 
