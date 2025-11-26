@@ -91,13 +91,27 @@ def login():
         if not bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8')):
             return jsonify({'error': 'Invalid credentials'}), 401
         
+        # 获取用户角色信息
+        cursor.execute("SELECT role, is_admin FROM users WHERE id = %s", (user_id,))
+        user_info = cursor.fetchone()
+        
+        if isinstance(user_info, dict):
+            role = user_info.get('role', 'user')
+            is_admin = bool(user_info.get('is_admin', 0))
+        else:
+            role = user_info[0] if user_info else 'user'
+            is_admin = bool(user_info[1] if len(user_info) > 1 else 0)
+        
         # JWT identity 必须是字符串
         access_token = create_access_token(identity=str(user_id))
         
         return jsonify({
             'message': 'Login successful',
             'access_token': access_token,
-            'user_id': user_id
+            'user_id': user_id,
+            'username': username,
+            'role': role,
+            'is_admin': is_admin
         }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -117,9 +131,10 @@ def get_profile():
         return jsonify({'error': 'Invalid user ID format'}), 400
     
     connection = db.get_connection()
+    request_id = request.headers.get('X-Request-ID', 'N/A')
     try:
         cursor = connection.cursor()
-        cursor.execute("SELECT id, username, email, created_at FROM users WHERE id = %s", (user_id,))
+        cursor.execute("SELECT id, username, email, role, is_admin, created_at FROM users WHERE id = %s", (user_id,))
         user = cursor.fetchone()
         
         if not user:
@@ -131,6 +146,8 @@ def get_profile():
                 'id': user.get('id'),
                 'username': user.get('username'),
                 'email': user.get('email'),
+                'role': user.get('role', 'user'),
+                'is_admin': bool(user.get('is_admin', 0)),
                 'created_at': user.get('created_at').isoformat() if user.get('created_at') else None
             }), 200
         else:
@@ -138,7 +155,9 @@ def get_profile():
                 'id': user[0],
                 'username': user[1],
                 'email': user[2],
-                'created_at': user[3].isoformat() if user[3] else None
+                'role': user[3] if len(user) > 3 else 'user',
+                'is_admin': bool(user[4] if len(user) > 4 else 0),
+                'created_at': user[5].isoformat() if len(user) > 5 and user[5] else None
             }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500

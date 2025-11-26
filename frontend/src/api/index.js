@@ -159,5 +159,28 @@ export default {
     get: (dishId) => api.get(`/ratings/${dishId}`),
     getHistory: (params) => api.get('/history', { params })
   },
+  // 管理后台
+  admin: {
+    // 菜品管理
+    dishes: {
+      getList: (params) => api.get('/admin/dishes', { params }),
+      create: (data) => api.post('/admin/dishes', data),
+      update: (id, data) => api.put(`/admin/dishes/${id}`, data),
+      delete: (id) => api.delete(`/admin/dishes/${id}`)
+    },
+    // 用户管理
+    users: {
+      getList: (params) => api.get('/admin/users', { params }),
+      update: (id, data) => api.put(`/admin/users/${id}`, data),
+      delete: (id) => api.delete(`/admin/users/${id}`)
+    },
+    // 评分管理
+    ratings: {
+      getList: (params) => api.get('/admin/ratings', { params }),
+      delete: (id) => api.delete(`/admin/ratings/${id}`)
+    },
+    // 统计信息
+    getStats: () => api.get('/admin/stats')
+  },
   setToken: api.setToken
 }

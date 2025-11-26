@@ -114,6 +114,7 @@ app.register_blueprint(auth.bp, url_prefix=Config.API_PREFIX)
 app.register_blueprint(dishes.bp, url_prefix=Config.API_PREFIX)
 app.register_blueprint(recommendations.bp, url_prefix=Config.API_PREFIX)
 app.register_blueprint(ratings.bp, url_prefix=Config.API_PREFIX)
+app.register_blueprint(admin.bp, url_prefix=Config.API_PREFIX)
 
 @app.route('/')
 def index():
