@@ -385,10 +385,35 @@ const ratingTotal = ref(0)
 const loadStats = async () => {
   try {
     const response = await api.admin.getStats()
-    stats.value = response.stats || {}
+    if (response && response.stats) {
+      stats.value = response.stats
+    } else {
+      console.warn('统计数据格式异常', response)
+      stats.value = {
+        total_users: 0,
+        total_dishes: 0,
+        total_ratings: 0,
+        avg_rating: 0,
+        categories: {}
+      }
+    }
   } catch (error) {
     console.error('加载统计数据失败', error)
-    ElMessage.error('加载统计数据失败')
+    const errorMsg = error.response?.data?.error || error.message || '未知错误'
+    console.error('错误详情:', {
+      status: error.response?.status,
+      error: errorMsg,
+      url: error.config?.url
+    })
+    ElMessage.error(`加载统计数据失败: ${errorMsg}`)
+    // 设置默认值，避免页面空白
+    stats.value = {
+      total_users: 0,
+      total_dishes: 0,
+      total_ratings: 0,
+      avg_rating: 0,
+      categories: {}
+    }
   }
 }
 
@@ -603,14 +628,34 @@ const handleMenuSelect = (key) => {
   }
 }
 
-onMounted(() => {
-  if (!userStore.isAdminUser) {
-    ElMessage.error('您没有管理员权限')
-    window.location.href = '/'
+onMounted(async () => {
+  // 检查登录状态
+  if (!userStore.isLoggedIn) {
+    ElMessage.error('请先登录')
+    window.location.href = '/login'
     return
   }
-  loadStats()
-  loadCategories()
+  
+  // 检查管理员权限
+  if (!userStore.isAdminUser) {
+    ElMessage.error('您没有管理员权限')
+    // 延迟跳转，让用户看到错误信息
+    setTimeout(() => {
+      window.location.href = '/'
+    }, 2000)
+    return
+  }
+  
+  // 加载数据
+  try {
+    await Promise.all([
+      loadStats(),
+      loadCategories()
+    ])
+  } catch (error) {
+    console.error('初始化后台管理页面失败', error)
+    ElMessage.error('加载数据失败，请刷新页面重试')
+  }
 })
 </script>
 
