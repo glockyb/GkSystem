@@ -194,7 +194,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useUserStore } from '../store/user'
 import api from '../api'
 import { ElMessage } from 'element-plus'
@@ -235,20 +235,30 @@ const loadRecommendations = async () => {
       }
     })
     
+    // 初始化每个推荐菜品的rating为0
+    recommendedDishes.value.forEach(dish => {
+      if (!dish.rating) {
+        dish.rating = 0
+      }
+    })
+    
     // 加载每个推荐菜品的用户评分
     if (recommendedDishes.value.length > 0) {
-      for (const dish of recommendedDishes.value) {
+      const ratingPromises = recommendedDishes.value.map(async (dish) => {
         try {
           const ratingResponse = await api.ratings.get(dish.id)
-          if (ratingResponse.rating) {
+          if (ratingResponse && ratingResponse.rating) {
             dish.rating = ratingResponse.rating
           } else {
             dish.rating = 0
           }
         } catch (error) {
+          // 如果获取评分失败，设置为0
+          console.log(`推荐菜品 ${dish.id} 暂无评分`)
           dish.rating = 0
         }
-      }
+      })
+      await Promise.all(ratingPromises)
     }
   } catch (error) {
     console.error('加载推荐失败', error)
@@ -299,6 +309,13 @@ const loadDishes = async () => {
       return true
     })
     
+    // 初始化每个菜品的rating为0
+    dishesList.forEach(dish => {
+      if (!dish.rating) {
+        dish.rating = 0
+      }
+    })
+    
     dishes.value = dishesList
     total.value = response.total || dishes.value.length
     
@@ -326,19 +343,27 @@ const loadDishes = async () => {
 
 const loadUserRatings = async () => {
   // 为每个菜品加载用户评分
-  for (const dish of dishes.value) {
+  if (!userStore.isLoggedIn || dishes.value.length === 0) {
+    return
+  }
+  
+  // 并行加载所有评分，提高性能
+  const ratingPromises = dishes.value.map(async (dish) => {
     try {
       const ratingResponse = await api.ratings.get(dish.id)
-      if (ratingResponse.rating) {
+      if (ratingResponse && ratingResponse.rating) {
         dish.rating = ratingResponse.rating
       } else {
         dish.rating = 0
       }
     } catch (error) {
-      // 如果获取评分失败，设置为0
+      // 如果获取评分失败（可能是404，表示没有评分），设置为0
+      console.log(`菜品 ${dish.id} 暂无评分`)
       dish.rating = 0
     }
-  }
+  })
+  
+  await Promise.all(ratingPromises)
 }
 
 const loadCategories = async () => {
@@ -516,6 +541,40 @@ const handleImageError = (event) => {
     }
   }
 }
+
+// 监听用户登录状态变化，重新加载评分
+watch(() => userStore.isLoggedIn, (isLoggedIn) => {
+  if (isLoggedIn) {
+    // 用户登录后，重新加载当前显示的菜品的评分
+    if (dishes.value.length > 0) {
+      loadUserRatings()
+    }
+    if (recommendedDishes.value.length > 0) {
+      // 重新加载推荐菜品的评分
+      const ratingPromises = recommendedDishes.value.map(async (dish) => {
+        try {
+          const ratingResponse = await api.ratings.get(dish.id)
+          if (ratingResponse && ratingResponse.rating) {
+            dish.rating = ratingResponse.rating
+          } else {
+            dish.rating = 0
+          }
+        } catch (error) {
+          dish.rating = 0
+        }
+      })
+      Promise.all(ratingPromises)
+    }
+  } else {
+    // 用户登出后，重置所有评分
+    dishes.value.forEach(dish => {
+      dish.rating = 0
+    })
+    recommendedDishes.value.forEach(dish => {
+      dish.rating = 0
+    })
+  }
+})
 
 onMounted(() => {
   if (userStore.isLoggedIn) {

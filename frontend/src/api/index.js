@@ -156,7 +156,25 @@ export default {
   // 评分
   ratings: {
     create: (data) => api.post('/ratings', data),
-    get: (dishId) => api.get(`/ratings/${dishId}`),
+    get: async (dishId) => {
+      try {
+        const response = await api.get(`/ratings/${dishId}`)
+        return response
+      } catch (error) {
+        // 如果获取评分失败（404或其他错误），返回null而不是抛出错误
+        // 后端API在没有评分时返回200状态码，rating为null
+        if (error.response?.status === 404) {
+          return { rating: null }
+        }
+        // 如果是200状态码但rating为null，也正常处理
+        if (error.response?.status === 200) {
+          return { rating: null }
+        }
+        // 其他错误也返回null，避免阻塞UI
+        console.warn(`获取菜品 ${dishId} 的评分失败:`, error)
+        return { rating: null }
+      }
+    },
     getHistory: (params) => api.get('/history', { params })
   },
   // 管理后台

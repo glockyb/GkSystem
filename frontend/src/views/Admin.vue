@@ -646,15 +646,42 @@ onMounted(async () => {
     return
   }
   
-  // 加载数据
+  // 加载数据 - 使用独立的try-catch，避免一个失败影响其他
   try {
-    await Promise.all([
-      loadStats(),
-      loadCategories()
-    ])
+    await loadStats()
   } catch (error) {
-    console.error('初始化后台管理页面失败', error)
-    ElMessage.error('加载数据失败，请刷新页面重试')
+    console.error('加载统计数据失败', error)
+    // 不阻止页面渲染，只显示警告
+    ElMessage.warning('加载统计数据失败，部分功能可能不可用')
+  }
+  
+  try {
+    await loadCategories()
+  } catch (error) {
+    console.error('加载分类失败', error)
+    // 不阻止页面渲染
+    ElMessage.warning('加载分类失败，部分功能可能不可用')
+  }
+  
+  // 如果当前选中的是其他菜单项，也加载对应数据
+  if (activeMenu.value === 'dishes') {
+    try {
+      await loadDishes()
+    } catch (error) {
+      console.error('加载菜品失败', error)
+    }
+  } else if (activeMenu.value === 'users') {
+    try {
+      await loadUsers()
+    } catch (error) {
+      console.error('加载用户失败', error)
+    }
+  } else if (activeMenu.value === 'ratings') {
+    try {
+      await loadRatings()
+    } catch (error) {
+      console.error('加载评分失败', error)
+    }
   }
 })
 </script>
