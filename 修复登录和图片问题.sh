@@ -7,11 +7,15 @@
 
 set -e
 
+# 自动检测项目路径
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR" || exit 1
+
 echo "=========================================="
 echo "🔧 修复登录和图片问题"
 echo "=========================================="
-
-cd ~/gksys/GkSystem || exit 1
+echo "项目路径: $SCRIPT_DIR"
+echo ""
 
 # 1. 检查并修复Nginx图片配置
 echo ""

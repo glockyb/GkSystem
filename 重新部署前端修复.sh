@@ -8,11 +8,15 @@
 
 set -e
 
+# 自动检测项目路径
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR" || exit 1
+
 echo "=========================================="
 echo "🔧 重新部署前端（包含修复）"
 echo "=========================================="
-
-cd ~/gksys/GkSystem || exit 1
+echo "项目路径: $SCRIPT_DIR"
+echo ""
 
 # 1. 检查前端代码
 echo ""
