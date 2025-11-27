@@ -175,6 +175,16 @@
                   @change="handleRatingChange(dish.id, $event)"
                 />
               </div>
+              <div class="dish-actions">
+                <el-button 
+                  type="primary" 
+                  @click="viewDish(dish.id)"
+                  class="view-btn"
+                  :icon="View"
+                >
+                  查看详情
+                </el-button>
+              </div>
             </div>
           </el-card>
         </div>
@@ -195,10 +205,13 @@
 
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useUserStore } from '../store/user'
 import api from '../api'
 import { ElMessage } from 'element-plus'
 import { Search, View, Box, Picture, Loading } from '@element-plus/icons-vue'
+
+const router = useRouter()
 
 const userStore = useUserStore()
 const activeTab = ref('recommendations')
@@ -448,9 +461,8 @@ const handleRatingChange = async (dishId, rating) => {
 }
 
 const viewDish = (dishId) => {
-  // 可以跳转到详情页
-  console.log('View dish:', dishId)
-  ElMessage.info('查看详情功能开发中...')
+  // 跳转到详情页
+  router.push(`/dish/${dishId}`)
 }
 
 // 处理图片URL，确保路径正确

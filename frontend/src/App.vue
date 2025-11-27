@@ -30,6 +30,14 @@
                   <el-icon><User /></el-icon>
                   个人中心
                 </el-dropdown-item>
+                <el-dropdown-item 
+                  v-if="userStore.isAdminUser" 
+                  @click="$router.push('/admin')"
+                  divided
+                >
+                  <el-icon><Setting /></el-icon>
+                  后台管理
+                </el-dropdown-item>
                 <el-dropdown-item @click="handleLogout" divided>
                   <el-icon><SwitchButton /></el-icon>
                   退出登录
@@ -53,7 +61,7 @@
 <script setup>
 import { useUserStore } from './store/user'
 import { useRouter } from 'vue-router'
-import { User, Food, ArrowDown, SwitchButton } from '@element-plus/icons-vue'
+import { User, Food, ArrowDown, SwitchButton, Setting } from '@element-plus/icons-vue'
 
 const userStore = useUserStore()
 const router = useRouter()

@@ -3,6 +3,7 @@ import Home from '../views/Home.vue'
 import Login from '../views/Login.vue'
 import Profile from '../views/Profile.vue'
 import Admin from '../views/Admin.vue'
+import DishDetail from '../views/DishDetail.vue'
 import { useUserStore } from '../store/user'
 
 const routes = [
@@ -27,6 +28,11 @@ const routes = [
     name: 'Admin',
     component: Admin,
     meta: { requiresAuth: true, requiresAdmin: true }
+  },
+  {
+    path: '/dish/:id',
+    name: 'DishDetail',
+    component: DishDetail
   }
 ]
 
