@@ -67,8 +67,19 @@ const userStore = useUserStore()
 const router = useRouter()
 
 const handleLogout = () => {
-  userStore.logout()
-  router.push('/login')
+  try {
+    // 清除所有状态
+    userStore.logout()
+    // 强制刷新页面以确保完全清除状态
+    setTimeout(() => {
+      window.location.href = '/login'
+    }, 100)
+  } catch (error) {
+    console.error('退出登录失败', error)
+    // 即使出错也清除localStorage并跳转
+    localStorage.clear()
+    window.location.href = '/login'
+  }
 }
 </script>
 

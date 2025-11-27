@@ -312,9 +312,12 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useUserStore } from '../store/user'
 import api from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
+
+const router = useRouter()
 import {
   DataAnalysis,
   Food,
@@ -632,16 +635,26 @@ onMounted(async () => {
   // 检查登录状态
   if (!userStore.isLoggedIn) {
     ElMessage.error('请先登录')
-    window.location.href = '/login'
+    router.push({ path: '/login', query: { redirect: '/admin' } })
     return
   }
   
-  // 检查管理员权限
-  if (!userStore.isAdminUser) {
+  // 检查管理员权限 - 从localStorage重新加载以确保状态正确
+  const storedIsAdmin = localStorage.getItem('isAdmin') === 'true'
+  const storedRole = localStorage.getItem('role')
+  const isAdminFromStorage = storedIsAdmin || storedRole === 'admin'
+  
+  // 如果store中的状态不对，更新它
+  if (!userStore.isAdminUser && isAdminFromStorage) {
+    userStore.isAdmin = true
+    userStore.role = storedRole || 'admin'
+  }
+  
+  if (!userStore.isAdminUser && !isAdminFromStorage) {
     ElMessage.error('您没有管理员权限')
     // 延迟跳转，让用户看到错误信息
     setTimeout(() => {
-      window.location.href = '/'
+      router.push('/')
     }, 2000)
     return
   }

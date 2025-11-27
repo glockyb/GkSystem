@@ -31,17 +31,27 @@ export const useUserStore = defineStore('user', () => {
   }
 
   function logout() {
+    // 清除所有状态
     token.value = ''
     userId.value = ''
     username.value = ''
     role.value = 'user'
     isAdmin.value = false
+    
+    // 清除所有localStorage
     localStorage.removeItem('token')
     localStorage.removeItem('userId')
     localStorage.removeItem('username')
     localStorage.removeItem('role')
     localStorage.removeItem('isAdmin')
+    
+    // 清除API token
     api.setToken('')
+    
+    // 清除axios默认headers
+    if (api.defaults && api.defaults.headers) {
+      delete api.defaults.headers.common['Authorization']
+    }
   }
 
   return {

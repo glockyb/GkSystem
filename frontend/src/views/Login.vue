@@ -126,13 +126,14 @@
 
 <script setup>
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '../store/user'
 import api from '../api'
 import { ElMessage } from 'element-plus'
 import { UserFilled, User, Lock, Message, Right, Check } from '@element-plus/icons-vue'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 const activeTab = ref('login')
 const loading = ref(false)
@@ -167,12 +168,50 @@ const handleLogin = async () => {
     if (valid) {
       loading.value = true
       try {
+        // 先清除可能存在的旧token
+        localStorage.removeItem('token')
+        localStorage.removeItem('userId')
+        localStorage.removeItem('username')
+        localStorage.removeItem('role')
+        localStorage.removeItem('isAdmin')
+        
+        // 清除API token
+        api.setToken('')
+        if (api.defaults && api.defaults.headers) {
+          delete api.defaults.headers.common['Authorization']
+        }
+        
         const response = await api.auth.login(loginForm.value)
+        
+        // 确保响应包含必要字段
+        if (!response || !response.access_token) {
+          throw new Error('登录响应格式错误')
+        }
+        
         userStore.login(response)
         ElMessage.success('登录成功')
-        router.push('/')
+        
+        // 检查是否有重定向参数
+        const redirect = route.query.redirect
+        if (redirect && typeof redirect === 'string') {
+          router.push(redirect)
+        } else {
+          // 根据用户角色决定跳转
+          if (response.is_admin || response.role === 'admin') {
+            // 管理员可以选择跳转到后台或首页
+            router.push('/')
+          } else {
+            router.push('/')
+          }
+        }
       } catch (error) {
-        ElMessage.error(error.response?.data?.error || '登录失败')
+        console.error('登录失败', error)
+        const errorMsg = error.response?.data?.error || error.message || '登录失败'
+        ElMessage.error(errorMsg)
+        
+        // 确保清除可能残留的token
+        localStorage.removeItem('token')
+        api.setToken('')
       } finally {
         loading.value = false
       }

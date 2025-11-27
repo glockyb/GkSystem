@@ -93,12 +93,20 @@ api.interceptors.response.use(
     // 处理 401 未授权（token 过期或无效）
     if (status === 401) {
       console.warn('[API] Token expired or invalid, clearing storage')
+      // 清除所有localStorage
       localStorage.removeItem('token')
       localStorage.removeItem('userId')
       localStorage.removeItem('username')
+      localStorage.removeItem('role')
+      localStorage.removeItem('isAdmin')
+      // 清除API token
+      if (api.defaults && api.defaults.headers) {
+        delete api.defaults.headers.common['Authorization']
+      }
       // 如果不在登录页，跳转到登录页
       if (window.location.pathname !== '/login') {
-        window.location.href = '/login'
+        // 使用replace避免历史记录问题
+        window.location.replace('/login')
       }
     }
     
@@ -112,13 +120,19 @@ api.interceptors.response.use(
           errorMsg.toLowerCase().includes('jwt') ||
           errorMsg.toLowerCase().includes('invalid')) {
         console.warn('[API] Invalid token detected, clearing storage')
+        // 清除所有localStorage
         localStorage.removeItem('token')
         localStorage.removeItem('userId')
         localStorage.removeItem('username')
-        
+        localStorage.removeItem('role')
+        localStorage.removeItem('isAdmin')
+        // 清除API token
+        if (api.defaults && api.defaults.headers) {
+          delete api.defaults.headers.common['Authorization']
+        }
         // 如果不在登录页，跳转到登录页
         if (window.location.pathname !== '/login') {
-          window.location.href = '/login'
+          window.location.replace('/login')
         }
       }
     }

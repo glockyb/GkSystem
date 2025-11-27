@@ -43,13 +43,41 @@ const router = createRouter({
 
 router.beforeEach((to, from, next) => {
   const userStore = useUserStore()
+  
+  // 检查是否需要认证
   if (to.meta.requiresAuth && !userStore.isLoggedIn) {
-    next('/login')
-  } else if (to.meta.requiresAdmin && !userStore.isAdminUser) {
-    next('/')
-  } else {
-    next()
+    // 保存目标路由，登录后可以跳转回来
+    next({
+      path: '/login',
+      query: { redirect: to.fullPath }
+    })
+    return
   }
+  
+  // 检查是否需要管理员权限
+  if (to.meta.requiresAdmin) {
+    if (!userStore.isLoggedIn) {
+      next({
+        path: '/login',
+        query: { redirect: to.fullPath }
+      })
+      return
+    }
+    
+    if (!userStore.isAdminUser) {
+      // 尝试从localStorage重新加载管理员状态
+      const storedIsAdmin = localStorage.getItem('isAdmin') === 'true'
+      const storedRole = localStorage.getItem('role')
+      
+      if (!storedIsAdmin && storedRole !== 'admin') {
+        ElMessage.error('您没有管理员权限')
+        next('/')
+        return
+      }
+    }
+  }
+  
+  next()
 })
 
 export default router
